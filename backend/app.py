@@ -5,7 +5,7 @@ from llm import chat
 from dotenv import load_dotenv
 
 load_dotenv()
-PORT = int(os.getenv('PORT', 5050))
+PORT = int(os.getenv('BACKEND_PORT', 5050))
 
 app = Flask(__name__)
 app.config['CORS_HEADERS'] = 'Content-Type'
