@@ -35,10 +35,10 @@ chain = prompt | llm | parser
 
 def chat(input: str) -> dict:
     result = chain.invoke({"input": input})
-    print(json.dumps(result, indent=2))
     return result
 
 # Example usage
 if __name__ == "__main__":
     user = """What is the capital of France?"""
-    chat(user)
+    response = chat(user)
+    print("Response:", response)
