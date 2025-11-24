@@ -2,6 +2,8 @@ import { useState } from "react"
 import { ChatInterface } from "@/components/chat-interface"
 import type { ChatMessage } from "@/types/chat"
 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5050/api"
+
 function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -31,29 +33,33 @@ function App() {
 
     // TODO: Replace with your actual backend call
     // Example backend integration:
-    // const response = await fetch('/api/chat', {
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify({
-    //     message: content,
-    //     files: uploadedFiles,
-    //     urls: uploadedUrls,
-    //     conversationHistory: messages,
-    //   }),
-    // });
-    // const data = await response.json();
+    const response = await fetch(`${API_URL}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: content,
+        files: uploadedFiles,
+        urls: uploadedUrls,
+        conversationHistory: messages,
+      }),
+    });
+    const data = await response.json();
+    console.log("Backend response:", data);
 
-    // Simulate AI response (placeholder)
-    setTimeout(() => {
-      const aiMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: `This is a placeholder response for: "${content}". Connect backend to see real AI responses. Files uploaded: ${uploadedFiles.length}, URLs added: ${uploadedUrls.length}.`,
-        sources: uploadedFiles.map((f) => f.name).concat(uploadedUrls),
-        timestamp: new Date(),
-      }
-      setMessages((prev) => [...prev, aiMessage])
-    }, 1000)
+    let reply = `This is a placeholder response for: "${content}". Connect backend to see real AI responses. Files uploaded: ${uploadedFiles.length}, URLs added: ${uploadedUrls.length}.`
+    if (response.ok) {
+      reply = data.reply;
+    }
+
+    // Add AI response message
+    const aiMessage: ChatMessage = {
+      id: (Date.now() + 1).toString(),
+      role: "assistant",
+      content: reply,
+      sources: data.sources || uploadedFiles.map((f) => f.name).concat(uploadedUrls),
+      timestamp: new Date(),
+    }
+    setMessages((prev) => [...prev, aiMessage])
   }
 
   const handleFilesAdded = (files: File[]) => {

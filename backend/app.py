@@ -18,7 +18,7 @@ CORS(app)
 def home():
 	return jsonify({'message': 'Welcome to the Chat API!'})
 
-@app.route('/chat', methods=['POST'])
+@app.route('/api/chat', methods=['POST'])
 def chat_endpoint():
 	data = request.args
 	user_input = data.get('input', '')
