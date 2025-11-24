@@ -71,8 +71,8 @@ export function ChatInterface({
         </div>
 
         {/* Chat messages and source manager */}
-        <div className="flex-1 w-full overflow-y-scroll">
-          <div className="overflow-y-visible flex flex-col">
+        <div className="flex-1 w-full overflow-y-auto">
+          <div className="flex flex-col">
             {/* Sources section */}
             {(uploadedFiles.length > 0 || uploadedUrls.length > 0) && (
               <SourceManager
@@ -87,11 +87,12 @@ export function ChatInterface({
             <ChatMessages messages={messages} />
           </div>
         </div>
+
+        {/* Input area */}
+        <div className="border-t">
+          <ChatInput onSendMessage={onSendMessage} onFilesAdded={onFilesAdded} onUrlAdded={onUrlAdded} />
+        </div>
       </div>
-      {/* Input area */}
-      {/* <div className="h-48">
-        <ChatInput onSendMessage={onSendMessage} onFilesAdded={onFilesAdded} onUrlAdded={onUrlAdded} />
-      </div> */}
     </div>
   )
 }
