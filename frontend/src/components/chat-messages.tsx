@@ -1,9 +1,11 @@
-"use client"
-
 import { useEffect, useRef } from "react"
 import type { ChatMessage } from "@/types/chat"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { MessageCircle, Sparkles } from "lucide-react"
+import 'highlight.js/styles/github-dark.css';
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeHighlight from "rehype-highlight";
 
 interface ChatMessagesProps {
   messages: ChatMessage[]
@@ -46,7 +48,14 @@ export function ChatMessages({ messages }: ChatMessagesProps) {
                 })}
               </span>
             </div>
-            <p className="text-sm text-foreground leading-relaxed wrap-break-word whitespace-pre-wrap">{message.content}</p>
+            <div className="prose prose-neutral dark:prose-invert max-w-none markdown">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}      // enables tables, strikethrough, etc.
+                rehypePlugins={[rehypeHighlight]} // enables syntax highlighting
+              >
+                {message.content}
+              </ReactMarkdown>
+            </div>
 
             {/* Sources */}
             {message.sources && message.sources.length > 0 && (

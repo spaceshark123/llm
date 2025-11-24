@@ -1,0 +1,256 @@
+/* ================
+   BASE WRAPPER
+   ================ */
+.markdown {
+    color: var(--foreground);
+    line-height: 1.65;
+    word-break: break-word;
+}
+
+/* Prevent Tailwind Preflight resets from breaking markdown */
+.markdown h1,
+.markdown h2,
+.markdown h3,
+.markdown h4,
+.markdown h5,
+.markdown h6,
+.markdown p,
+.markdown ul,
+.markdown ol,
+.markdown blockquote,
+.markdown pre,
+.markdown table {
+    margin-left: 0;
+    margin-right: 0;
+}
+
+/* ================
+   HEADERS
+   ================ */
+.markdown h1 {
+    font-size: 2.25rem;
+    line-height: 2.5rem;
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    font-weight: 800;
+}
+
+.markdown h2 {
+    font-size: 1.875rem;
+    line-height: 2.25rem;
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    font-weight: 700;
+}
+
+.markdown h3 {
+    font-size: 1.5rem;
+    line-height: 2rem;
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+    font-weight: 700;
+}
+
+.markdown h4 {
+    font-size: 1.25rem;
+    line-height: 1.75rem;
+    margin-top: 1.25rem;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+.markdown h5 {
+    font-size: 1.125rem;
+    line-height: 1.5rem;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+.markdown h6 {
+    font-size: 1rem;
+    line-height: 1.5rem;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+/* ================
+   PARAGRAPHS
+   ================ */
+.markdown p {
+    margin-top: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+/* ================
+   LISTS
+   ================ */
+.markdown ul,
+.markdown ol {
+    margin-top: 0.75rem;
+    margin-bottom: 0.75rem;
+    padding-left: 1.5rem;
+}
+
+.markdown ul {
+    list-style-type: disc;
+}
+
+.markdown ol {
+    list-style-type: decimal;
+}
+
+.markdown li {
+    margin-top: 0.25rem;
+    margin-bottom: 0.25rem;
+}
+
+/* ================
+   BLOCKQUOTES
+   ================ */
+.markdown blockquote {
+    border-left: 4px solid var(--accent);
+    padding-left: 1rem;
+    margin: 1rem 0;
+    color: var(--muted-foreground);
+    font-style: italic;
+}
+
+/* ================
+   INLINE CODE
+   ================ */
+.markdown code {
+    font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 0.875rem;
+    background-color: rgba(255, 255, 255, 0.05);
+    padding: 0.25rem 0.4rem;
+    border-radius: 0.35rem;
+}
+
+/* Prevent double styling inside code blocks */
+.markdown pre code {
+    background: none !important;
+    padding: 0;
+}
+
+/* ================
+   FENCED CODE BLOCKS
+   ================ */
+.markdown pre {
+    background-color: #111;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    overflow-x: auto;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Make highlight.js readable in dark mode */
+.markdown pre code.hljs {
+    display: block;
+    font-size: 0.875rem;
+    line-height: 1.5rem;
+}
+
+/* ================
+   TABLES
+   ================ */
+.markdown table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+    overflow-x: auto;
+    display: block;
+}
+
+.markdown th,
+.markdown td {
+    border: 1px solid var(--border);
+    padding: 0.5rem 0.75rem;
+}
+
+.markdown thead tr {
+    background-color: rgba(255, 255, 255, 0.06);
+    font-weight: 600;
+}
+
+/* ================
+   IMAGES
+   ================ */
+.markdown img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.5rem;
+    margin: 1rem 0;
+}
+
+/* ================
+   HORIZONTAL RULE
+   ================ */
+.markdown hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 1.5rem 0;
+}
+
+/* ======================
+   LINKS
+   ====================== */
+.markdown a {
+  color: var(--color-chart-1);                  /* bright accent color */
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+  transition: color 120ms ease, opacity 120ms ease;
+}
+
+/* Hover: brighten slightly (NOT darken — darken looks muddy on dark background) */
+.markdown a:hover,
+.markdown a:active {
+  color: color-mix(in srgb, var(--color-chart-1) 85%, white 15%);
+  opacity: 1;
+}
+
+/* Visited: subtle shift but still readable in dark mode */
+.markdown a:visited {
+  color: color-mix(in srgb, var(--color-chart-1) 70%, var(--muted-foreground) 30%);
+}
+
+/* Focus ring for keyboard users — needs contrast on dark bg */
+.markdown a:focus {
+  outline: 2px solid color-mix(in srgb, var(--color-chart-1) 60%, white 40%);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* Code inside links — remove code background to avoid contrast issues */
+.markdown a code {
+  background: none !important;
+  padding: 0.15rem 0.25rem;
+  border-radius: 0.25rem;
+  color: inherit; /* keep accent color */
+}
+
+/* Prevent extremely long URLs from breaking layout */
+.markdown a {
+  word-break: break-word;
+  hyphens: auto;
+}
+
+/* ======================
+   OPTIONAL: external link micro-icon
+   (requires an inline SVG or pseudo-element)
+   ====================== */
+.markdown a[target="_blank"]::after {
+  content: "";
+  display: inline-block;
+  width: 0.8rem;
+  height: 0.8rem;
+  margin-left: 0.35rem;
+  vertical-align: text-bottom;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23aaaaaa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M18 13v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'></path><path d='M15 3h6v6'></path><path d='M10 14L21 3'></path></svg>");
+  background-repeat: no-repeat;
+  background-size: contain;
+  opacity: 0.85;
+}

@@ -34,9 +34,8 @@ export function ChatInterface({
   return (
     <div className="flex w-screen h-screen bg-background">
       <div
-        className={`${
-          sidebarOpen ? "w-64" : "w-0"
-        } transition-all duration-300 bg-card border-r border-border flex flex-col`}
+        className={`${sidebarOpen ? "w-64" : "w-0"
+          } transition-all duration-300 bg-card border-r border-border flex flex-col`}
       >
         <div className="p-4 border-b border-border">
           <h1 className="text-xl font-bold text-foreground">LLM Chat</h1>
@@ -62,7 +61,7 @@ export function ChatInterface({
       {/* Main chat area */}
       <div className="flex-1 flex flex-col">
         {/* Header */}
-        <div className="border-b border-border bg-card px-6 py-4 flex items-center justify-between">
+        <div className="border-b border-border bg-card px-6 py-4 flex items-center justify-between w-full z-50">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="sm" onClick={() => setSidebarOpen(!sidebarOpen)} className="lg:hidden">
               <Menu className="h-5 w-5" />
@@ -72,24 +71,27 @@ export function ChatInterface({
         </div>
 
         {/* Chat messages and source manager */}
-        <div className="flex-1 overflow-y-auto flex flex-col">
-          {/* Sources section */}
-          {(uploadedFiles.length > 0 || uploadedUrls.length > 0) && (
-            <SourceManager
-              files={uploadedFiles}
-              urls={uploadedUrls}
-              onRemoveFile={onRemoveFile}
-              onRemoveUrl={onRemoveUrl}
-            />
-          )}
+        <div className="flex-1 w-full overflow-y-scroll">
+          <div className="overflow-y-visible flex flex-col">
+            {/* Sources section */}
+            {(uploadedFiles.length > 0 || uploadedUrls.length > 0) && (
+              <SourceManager
+                files={uploadedFiles}
+                urls={uploadedUrls}
+                onRemoveFile={onRemoveFile}
+                onRemoveUrl={onRemoveUrl}
+              />
+            )}
 
-          {/* Messages */}
-          <ChatMessages messages={messages} />
+            {/* Messages */}
+            <ChatMessages messages={messages} />
+          </div>
         </div>
-
-        {/* Input area */}
-        <ChatInput onSendMessage={onSendMessage} onFilesAdded={onFilesAdded} onUrlAdded={onUrlAdded} />
       </div>
+      {/* Input area */}
+      {/* <div className="h-48">
+        <ChatInput onSendMessage={onSendMessage} onFilesAdded={onFilesAdded} onUrlAdded={onUrlAdded} />
+      </div> */}
     </div>
   )
 }

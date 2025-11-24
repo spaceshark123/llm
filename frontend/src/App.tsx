@@ -33,21 +33,69 @@ function App() {
 
     // TODO: Replace with your actual backend call
     // Example backend integration:
-    const response = await fetch(`${API_URL}/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: content,
-        files: uploadedFiles,
-        urls: uploadedUrls,
-        conversationHistory: messages,
-      }),
-    });
-    const data = await response.json();
-    console.log("Backend response:", data);
+    let response;
+    let data;
+    try {
+      response = await fetch(`${API_URL}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: content,
+          files: uploadedFiles,
+          urls: uploadedUrls,
+          conversationHistory: messages,
+        }),
+      });
+      data = await response.json();
+      console.log("Backend response:", data);
+    } catch (error) {
+      console.error("Error communicating with backend:", error);
+    }
 
     let reply = `This is a placeholder response for: "${content}". Connect backend to see real AI responses. Files uploaded: ${uploadedFiles.length}, URLs added: ${uploadedUrls.length}.`
-    if (response.ok) {
+    reply = `# Welcome to the LLM Assistant
+
+Here's a comprehensive example of **markdown formatting** that I can render:
+
+## Features
+
+- Bullet point 1
+- Bullet point 2
+- Bullet point 3
+
+### Code Example
+
+Here's some \`inline code\` and a code block:
+
+\`\`\`python
+def hello_world():
+    print("Hello, World!")
+    return True
+\`\`\`
+
+## Formatting Examples
+
+You can use **bold text**, *italic text*, and ***bold italic***.
+
+> This is a blockquote. You can use it to highlight important information.
+
+### Links and Tables
+
+| Feature | Status |
+|---------|--------|
+| File Upload | ✓ |
+| URL Input | ✓ |
+| Markdown Support | ✓ |
+
+## Tips
+
+1. Upload files (PDF, TXT, DOCX)
+2. Add website URLs
+3. Ask questions about your sources
+
+this is a test link: [OpenAI](https://www.openai.com)
+`
+    if (response && response.ok) {
       reply = data.reply;
     }
 
@@ -56,7 +104,7 @@ function App() {
       id: (Date.now() + 1).toString(),
       role: "assistant",
       content: reply,
-      sources: data.sources || uploadedFiles.map((f) => f.name).concat(uploadedUrls),
+      sources: data?.sources || uploadedFiles.map((f) => f.name).concat(uploadedUrls),
       timestamp: new Date(),
     }
     setMessages((prev) => [...prev, aiMessage])
