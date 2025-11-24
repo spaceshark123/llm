@@ -20,13 +20,25 @@ def home():
 
 @app.route('/api/chat', methods=['POST'])
 def chat_endpoint():
-	data = request.args
-	user_input = data.get('input', '')
-	if not user_input:
+	data = request.get_json()   # Parse JSON body
+
+	# Extract fields
+	message = data.get('message')
+	files = data.get('files', [])
+	urls = data.get('urls', [])
+	conversation_history = data.get('conversationHistory', [])
+
+	print("Message:", message)
+	print("Files:", files)
+	print("URLs:", urls)
+	print("Conversation:", conversation_history)
+
+	if not message:
 		return jsonify({'error': 'Input is required'}), 400
 
-	response = chat(user_input)
-	return jsonify({'response': response})
+	# ignore files, urls, and conversation history for now
+	reply = chat(message)
+	return jsonify({'reply': reply})
 
 if __name__ == '__main__':
 	app.run(port=PORT, debug=True)
