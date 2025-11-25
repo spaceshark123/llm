@@ -92,7 +92,6 @@ export function ChatMessages({ messages, onStreamingComplete, onStreamingStart }
               truncatedContent={message.truncatedContent}
               onFinishStreaming={() => onStreamingComplete?.(message.id)}
               onStartStreaming={() => onStreamingStart?.(message.id)}
-              answerNow={message.truncatedContent === "__COMPLETE__"}
             />
 
             {/* Sources */}

@@ -17,11 +17,11 @@ interface StreamingTextProps {
   onFinishStreaming?: () => void
   truncatedContent?: string
   onStartStreaming?: () => void
-  answerNow?: boolean
 }
 
-export function StreamingText({ content, isStreaming = false, speed = 6.25, onFinishStreaming, truncatedContent, onStartStreaming, answerNow = false }: StreamingTextProps) {
+export function StreamingText({ content, isStreaming = false, speed = 6.25, onFinishStreaming, truncatedContent, onStartStreaming}: StreamingTextProps) {
   const [displayedContent, setDisplayedContent] = useState("")
+  const [showAll, setShowAll] = useState(false)
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isAnimating, setIsAnimating] = useState(false)
   const timerRef = useRef<number | null>(null)
@@ -40,6 +40,7 @@ export function StreamingText({ content, isStreaming = false, speed = 6.25, onFi
       if (isStreaming) {
         // New streaming message - start from beginning
         setDisplayedContent("")
+        setShowAll(false)
         setCurrentIndex(0)
         setIsAnimating(true)
         // notify once that streaming started
@@ -50,6 +51,7 @@ export function StreamingText({ content, isStreaming = false, speed = 6.25, onFi
         }
       } else {
         // Non-streaming message - show full content
+        setShowAll(true)
         setDisplayedContent(content)
         setCurrentIndex(content.length)
         setIsAnimating(false)
@@ -60,27 +62,24 @@ export function StreamingText({ content, isStreaming = false, speed = 6.25, onFi
   // Handle stop command only
   useEffect(() => {
     if (truncatedContent === "__TRUNCATE__") {
+      console.log("Handling stop generation")
       // Clear any pending animation timer
       if (timerRef.current !== null) {
         clearTimeout(timerRef.current)
         timerRef.current = null
       }
       setIsAnimating(false)
-    }
-  }, [truncatedContent])
-
-  // Handle Answer Now: instantly show full content and complete
-  useEffect(() => {
-    if (answerNow) {
+    } else if (truncatedContent === "__COMPLETE__") {
+      console.log("Handling Answer Now completion")
+      setShowAll(true)
       // Clear any pending animation timer
       if (timerRef.current !== null) {
         clearTimeout(timerRef.current)
         timerRef.current = null
       }
-      setDisplayedContent(content)
+      setIsAnimating(false)
       setCurrentIndex(content.length)
-      setIsAnimating(false)
-      // Defer the completion callback to ensure displayedContent state update commits first
+      // Defer the completion callback to ensure state update commits first
       const timeoutId = setTimeout(() => {
         if (onFinishStreaming) {
           onFinishStreaming()
@@ -88,7 +87,7 @@ export function StreamingText({ content, isStreaming = false, speed = 6.25, onFi
       }, 0)
       return () => clearTimeout(timeoutId)
     }
-  }, [answerNow, content, onFinishStreaming])
+  }, [truncatedContent])
 
   // Debounce markdown rendering to avoid expensive re-parses during streaming
   useEffect(() => {
@@ -138,10 +137,10 @@ export function StreamingText({ content, isStreaming = false, speed = 6.25, onFi
     <div className="prose prose-neutral dark:prose-invert max-w-none markdown">
       {displayedContent ? (
         // Show markdown-formatted content updated in real-time during streaming
-        <MarkdownDisplay content={displayedContent} />
+        <MarkdownDisplay content={showAll ? content : displayedContent} />
       ) : (
         // Fallback: show plain text if content is empty
-        <pre className="whitespace-pre-wrap break-words font-sans text-base">{displayedContent}</pre>
+        <pre className="whitespace-pre-wrap wrap-break-word font-sans text-base">{showAll ? content : displayedContent}</pre>
       )}
       {isAnimating && currentIndex < content.length && (
         <span className="inline-block w-1 h-4 bg-primary animate-pulse ml-1" />
