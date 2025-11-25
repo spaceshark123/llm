@@ -1,6 +1,8 @@
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { ChatInterface } from "@/components/chat-interface"
 import type { ChatMessage } from "@/types/chat"
+import type { Session } from "@/types/session"
+import { flushSync } from "react-dom"
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5050/api"
 const initialMessage: string = "Hello! I'm your LLM Assistant. You can upload files (PDF, TXT, DOCX) or provide website URLs, then ask me questions. I'll help you find answers based on your provided sources."
@@ -23,13 +25,92 @@ function App() {
   const [responseReady, setResponseReady] = useState(false)
   const [streamingStarted, setStreamingStarted] = useState(false)
   const [controlsLocked, setControlsLocked] = useState(false)
-  const [sessions, setSessions] = useState<string[]>(["default"])
-  const [currentSessionIndex, setCurrentSessionIndex] = useState(0)
+  const [sessions, setSessions] = useState<Session[]>([])
+  const [currentSessionIndex, setCurrentSessionIndex] = useState(-1)
   const currentMessageIdRef = useRef<string | null>(null)
   const activeGenerationIdRef = useRef<number | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const isCanceledRef = useRef(false)
   const controlsUnlockTimerRef = useRef<number | null>(null)
+
+  const fetchHistory = async () => {
+    if (currentSessionIndex === -1) {
+      // reset to initial message
+      setMessages([
+        {
+          id: "1",
+          role: "assistant",
+          content:
+            initialMessage,
+          sources: [],
+          timestamp: new Date(),
+        },
+      ])
+      return
+    }
+    const sessionId = sessions[currentSessionIndex]?.id
+    if (!sessionId) return
+
+    try {
+      const response = await fetch(`${API_URL}/history`, {
+        method: 'GET',
+        headers: {
+          'Session-ID': sessionId,
+        },
+      })
+      const data = await response.json()
+      if (response.ok) {
+        setMessages(data.history)
+      } else {
+        console.error("Failed to fetch history:", data)
+      }
+    } catch (error) {
+      console.error("Error fetching history:", error)
+    }
+  }
+
+  useEffect(() => {
+    if(isGenerating) return; // do not change messages while generating
+    // update messages when current session changes to non -1
+    if (currentSessionIndex !== -1) {
+      const sessionId = sessions[currentSessionIndex]?.id
+      if (sessionId) {
+        fetch(`${API_URL}/history`, {
+          method: 'GET',
+          headers: {
+            'Session-ID': sessionId,
+          },
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            console.log("Fetched history for session:", currentSessionIndex, data)
+            if (data.history) {
+              setMessages(data.history)
+            }
+          })
+          .catch((error) => {
+            console.error("Error fetching history:", error)
+          })
+      }
+    } else {
+      // reset to initial message
+      setMessages([
+        {
+          id: "1",
+          role: "assistant",
+          content:
+            initialMessage,
+          sources: [],
+          timestamp: new Date(),
+        },
+      ])
+    }
+    console.log("updated messages for session index:", currentSessionIndex)
+  }, [currentSessionIndex])
+
+  useEffect(() => {
+    console.log("Sessions updated:", sessions)
+  }, [sessions])
 
   const handleSendMessage = async (content: string) => {
     // Add user message
@@ -40,8 +121,11 @@ function App() {
       sources: [],
       timestamp: new Date(),
     }
-
-    setMessages((prev) => [...prev, userMessage])
+    flushSync(() => {
+      setMessages((prev) => [...prev, userMessage])
+    })
+    // Give React a chance to paint the update NOW
+    await new Promise(resolve => setTimeout(resolve, 0));
     setIsGenerating(true)
     setResponseReady(false)
     setStreamingStarted(false)
@@ -60,6 +144,25 @@ function App() {
     abortControllerRef.current = controller
 
     // Backend call with cancellation support
+    // check if this is the first message to start a new session
+    let sessionId = "";
+    if (currentSessionIndex === -1) {
+      // create a new session id
+      sessionId = `session-${Date.now()}`
+      // name after first message
+      const newSessionName = content.slice(0, 20) + (content.length > 20 ? "..." : "")
+      const newSession: Session = { id: sessionId, name: newSessionName }
+      setCurrentSessionIndex(sessions.length)
+      setSessions((prev) => [...prev, newSession])
+      // clear initial message
+      setMessages([userMessage])
+      console.log("Created new session:", sessionId, newSessionName)
+      console.log("Sessions now:", sessions)
+      console.log("Current session index now:", sessions.length)
+    } else {
+      sessionId = sessions[currentSessionIndex]?.id
+    }
+
     let response
     let data
     try {
@@ -67,13 +170,12 @@ function App() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Session-ID': sessions[currentSessionIndex],
+          'Session-ID': sessionId,
         },
         body: JSON.stringify({
           message: content,
           files: uploadedFiles,
           urls: uploadedUrls,
-          conversationHistory: messages,
         }),
         signal: controller.signal,
       });
@@ -148,8 +250,8 @@ function App() {
 
   const handleStreamingComplete = (messageId: string) => {
     // Called when StreamingText finishes animating
-    setMessages((prev) => 
-      prev.map((msg) => 
+    setMessages((prev) =>
+      prev.map((msg) =>
         msg.id === messageId ? { ...msg, isStreaming: false, truncatedContent: undefined } : msg
       )
     )
@@ -169,7 +271,7 @@ function App() {
   const handleStopGeneration = () => {
     if (currentMessageIdRef.current) {
       // Find the current message and get its displayed content to truncate
-      setMessages((prev) => 
+      setMessages((prev) =>
         prev.map((msg) => {
           if (msg.id === currentMessageIdRef.current) {
             // Mark as truncated - StreamingText will handle showing only what's been displayed
@@ -183,7 +285,7 @@ function App() {
     } else {
       // Stop requested before the assistant message exists; cancel in-flight request
       if (abortControllerRef.current) {
-        try { abortControllerRef.current.abort() } catch {}
+        try { abortControllerRef.current.abort() } catch { }
       }
       // Invalidate this generation so late responses are ignored
       activeGenerationIdRef.current = null
@@ -203,8 +305,8 @@ function App() {
   const handleAnswerNow = () => {
     if (currentMessageIdRef.current) {
       // Mark as complete so StreamingText shows full content instantly and finishes
-      setMessages((prev) => 
-        prev.map((msg) => 
+      setMessages((prev) =>
+        prev.map((msg) =>
           msg.id === currentMessageIdRef.current ? { ...msg, truncatedContent: "__COMPLETE__" } : msg
         )
       )
@@ -223,12 +325,13 @@ function App() {
         timestamp: new Date(),
       },
     ])
-    await fetch(`${API_URL}/history`, {
-      method: 'DELETE',
-      headers: {
-        'Session-ID': sessions[currentSessionIndex],
-      },
-    })
+    // await fetch(`${API_URL}/history`, {
+    //   method: 'DELETE',
+    //   headers: {
+    //     'Session-ID': sessions[currentSessionIndex]?.id,
+    //   },
+    // })
+    setCurrentSessionIndex(-1) // reset to no session
     setUploadedFiles([])
     setUploadedUrls([])
   }
@@ -252,6 +355,10 @@ function App() {
       onStreamingStart={handleStreamingStart}
       streamingStarted={streamingStarted}
       controlsLocked={controlsLocked}
+      sessions={sessions}
+      currentSessionIndex={currentSessionIndex}
+      setSessions={setSessions}
+      setCurrentSessionIndex={setCurrentSessionIndex}
     />
   )
 }

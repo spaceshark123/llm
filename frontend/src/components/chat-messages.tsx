@@ -79,10 +79,10 @@ export function ChatMessages({ messages, onStreamingComplete, onStreamingStart }
                 {message.role === "assistant" ? "Assistant" : "You"}
               </span>
               <span className="text-xs text-muted-foreground">
-                {message.timestamp.toLocaleTimeString([], {
+                {message.timestamp instanceof Date && message.timestamp !== null ? message.timestamp.toLocaleTimeString([], {
                   hour: "2-digit",
                   minute: "2-digit",
-                })}
+                }) : null}
               </span>
             </div>
             <StreamingText 

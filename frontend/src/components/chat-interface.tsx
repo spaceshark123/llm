@@ -5,6 +5,7 @@ import { SourceManager } from "./source-manager"
 import type { ChatMessage } from "@/types/chat"
 import { Button } from "@/components/ui/button"
 import { RotateCcw, Menu, Upload } from "lucide-react"
+import type { Session } from "@/types/session"
 
 interface ChatInterfaceProps {
   messages: ChatMessage[]
@@ -24,6 +25,10 @@ interface ChatInterfaceProps {
   onStreamingStart?: (messageId: string) => void
   streamingStarted?: boolean
   controlsLocked?: boolean
+  sessions: Session[]
+  currentSessionIndex: number
+  setSessions: (sessions: Session[]) => void
+  setCurrentSessionIndex: (index: number) => void
 }
 
 export function ChatInterface({
@@ -44,6 +49,10 @@ export function ChatInterface({
   onStreamingStart,
   streamingStarted = false,
   controlsLocked = false,
+  sessions,
+  currentSessionIndex,
+  setSessions,
+  setCurrentSessionIndex,
 }: ChatInterfaceProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [isDragOverChat, setIsDragOverChat] = useState(false)
@@ -114,7 +123,23 @@ export function ChatInterface({
             <div className="space-y-2">
               <div className="text-sm font-semibold text-muted-foreground px-2">History</div>
               <div className="px-2 py-3 rounded bg-muted/30 border border-dashed border-border">
-                <p className="text-xs text-muted-foreground text-center">Chat history will appear here</p>
+                {sessions.length > 0 ? (
+                  sessions.map((session, index) => (
+                    <Button
+                      key={session.id}
+                      onClick={() => {
+                        setCurrentSessionIndex(index)
+                      }}
+                      variant="outline"
+                      size="sm"
+                      className={currentSessionIndex === index ? "w-full justify-start gap-2 bg-gray-700! mb-1" : "w-full justify-start gap-2 mb-1"}
+                    >
+                      {session.name}
+                    </Button>
+                  ))
+                ) : (
+                  <p className="text-xs text-muted-foreground text-center">Chat history will appear here</p>
+                )}
               </div>
             </div>
           </div>
