@@ -59,6 +59,11 @@ def chat(input_str: str, session_id: str = "default") -> str:
     )
     return response
 
+def clear_session(session_id: str):
+    """Clear the message history for a session."""
+    if session_id in store:
+        del store[session_id]
+
 # Example usage
 if __name__ == "__main__":
     print("User: Hi, my name is Joe.")

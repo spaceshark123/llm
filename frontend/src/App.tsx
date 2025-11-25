@@ -3,6 +3,7 @@ import { ChatInterface } from "@/components/chat-interface"
 import type { ChatMessage } from "@/types/chat"
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5050/api"
+const initialMessage: string = "Hello! I'm your LLM Assistant. You can upload files (PDF, TXT, DOCX) or provide website URLs, then ask me questions. I'll help you find answers based on your provided sources."
 
 function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -10,7 +11,7 @@ function App() {
       id: "1",
       role: "assistant",
       content:
-        "Hello! I'm your LLM Assistant. You can upload files (PDF, TXT, DOCX) or provide website URLs, then ask me questions. I'll help you find answers based on your provided sources.",
+        initialMessage,
       sources: [],
       timestamp: new Date(),
     },
@@ -22,6 +23,8 @@ function App() {
   const [responseReady, setResponseReady] = useState(false)
   const [streamingStarted, setStreamingStarted] = useState(false)
   const [controlsLocked, setControlsLocked] = useState(false)
+  const [sessions, setSessions] = useState<string[]>(["default"])
+  const [currentSessionIndex, setCurrentSessionIndex] = useState(0)
   const currentMessageIdRef = useRef<string | null>(null)
   const activeGenerationIdRef = useRef<number | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -62,7 +65,10 @@ function App() {
     try {
       response = await fetch(`${API_URL}/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Session-ID': sessions[currentSessionIndex],
+        },
         body: JSON.stringify({
           message: content,
           files: uploadedFiles,
@@ -95,48 +101,7 @@ function App() {
       return
     }
 
-    let reply = `# Welcome to the LLM Assistant
-
-Here's a comprehensive example of **markdown formatting** that I can render:
-
-## Features
-
-- Bullet point 1
-- Bullet point 2
-- Bullet point 3
-
-### Code Example
-
-Here's some \`inline code\` and a code block:
-
-\`\`\`python
-def hello_world():
-    print("Hello, World!")
-    return True
-\`\`\`
-
-## Formatting Examples
-
-You can use **bold text**, *italic text*, and ***bold italic***.
-
-> This is a blockquote. You can use it to highlight important information.
-
-### Links and Tables
-
-| Feature | Status |
-|---------|--------|
-| File Upload | ✓ |
-| URL Input | ✓ |
-| Markdown Support | ✓ |
-
-## Tips
-
-1. Upload files (PDF, TXT, DOCX)
-2. Add website URLs
-3. Ask questions about your sources
-
-this is a test link: [OpenAI](https://www.openai.com)
-`
+    let reply = `I'm sorry, I couldn't generate a response.`
     if (response && response.ok) {
       reply = data.reply;
     }
@@ -246,18 +211,24 @@ this is a test link: [OpenAI](https://www.openai.com)
     }
   }
 
-  const handleClearChat = () => {
+  const handleClearChat = async () => {
     handleStopGeneration()
     setMessages([
       {
         id: "1",
         role: "assistant",
         content:
-          "Hello! I'm your LLM Assistant. You can upload files (PDF, TXT, DOCX) or provide website URLs, then ask me questions. I'll help you find answers based on your provided sources.",
+          initialMessage,
         sources: [],
         timestamp: new Date(),
       },
     ])
+    await fetch(`${API_URL}/history`, {
+      method: 'DELETE',
+      headers: {
+        'Session-ID': sessions[currentSessionIndex],
+      },
+    })
     setUploadedFiles([])
     setUploadedUrls([])
   }
