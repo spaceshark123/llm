@@ -4,7 +4,7 @@ import { ChatInput } from "./chat-input"
 import { SourceManager } from "./source-manager"
 import type { ChatMessage } from "@/types/chat"
 import { Button } from "@/components/ui/button"
-import { RotateCcw, Menu } from "lucide-react"
+import { RotateCcw, Menu, Upload } from "lucide-react"
 
 interface ChatInterfaceProps {
   messages: ChatMessage[]
@@ -46,6 +46,42 @@ export function ChatInterface({
   controlsLocked = false,
 }: ChatInterfaceProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [isDragOverChat, setIsDragOverChat] = useState(false)
+
+  const validateAndProcessFiles = (files: FileList | null) => {
+    if (!files) return
+
+    const fileArray = Array.from(files)
+    const validFiles = fileArray.filter((file) => {
+      const ext = file.name.split(".").pop()?.toLowerCase()
+      return ["pdf", "txt", "doc", "docx"].includes(ext || "")
+    })
+
+    if (validFiles.length > 0) {
+      onFilesAdded(validFiles)
+    } else if (fileArray.length > 0) {
+      alert("Please upload PDF, TXT, DOC, or DOCX files only.")
+    }
+  }
+
+  const handleChatDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOverChat(true)
+  }
+
+  const handleChatDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOverChat(false)
+  }
+
+  const handleChatDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOverChat(false)
+    validateAndProcessFiles(e.dataTransfer.files)
+  }
 
   return (
     <div className="flex w-screen h-screen bg-background">
@@ -57,19 +93,30 @@ export function ChatInterface({
           <h1 className="text-xl font-bold text-foreground">LLM Chat</h1>
         </div>
         <div className="flex-1 overflow-y-auto p-4">
-          <div className="space-y-2">
-            <div className="text-sm text-muted-foreground px-2">Conversation</div>
-            {messages.length > 0 && (
-              <Button
-                onClick={onClearChat}
-                variant="outline"
-                size="sm"
-                className="w-full justify-start gap-2 bg-transparent"
-              >
-                <RotateCcw className="h-4 w-4" />
-                New Chat
-              </Button>
-            )}
+          <div className="space-y-4">
+            {/* New Chat Section */}
+            <div className="space-y-2">
+              <div className="text-sm font-semibold text-muted-foreground px-2">New</div>
+              {messages.length > 0 && (
+                <Button
+                  onClick={onClearChat}
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start gap-2 bg-transparent"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  New Chat
+                </Button>
+              )}
+            </div>
+
+            {/* Chat History Section */}
+            <div className="space-y-2">
+              <div className="text-sm font-semibold text-muted-foreground px-2">History</div>
+              <div className="px-2 py-3 rounded bg-muted/30 border border-dashed border-border">
+                <p className="text-xs text-muted-foreground text-center">Chat history will appear here</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -87,8 +134,15 @@ export function ChatInterface({
         </div>
 
         {/* Chat messages and source manager */}
-        <div className="flex-1 w-full overflow-y-auto">
-          <div className="flex flex-col">
+        <div 
+          className={`flex-1 w-full overflow-y-auto transition-colors relative ${
+            isDragOverChat ? "bg-primary/5" : ""
+          }`}
+          onDragOver={handleChatDragOver}
+          onDragLeave={handleChatDragLeave}
+          onDrop={handleChatDrop}
+        >
+          <div className="flex flex-col h-full">
             {/* Sources section */}
             {(uploadedFiles.length > 0 || uploadedUrls.length > 0) && (
               <SourceManager
@@ -102,6 +156,16 @@ export function ChatInterface({
             {/* Messages */}
             <ChatMessages messages={messages} onStreamingComplete={onStreamingComplete} onStreamingStart={onStreamingStart} />
           </div>
+
+          {/* Drag overlay hint */}
+          {isDragOverChat && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/20 rounded pointer-events-none">
+              <div className="flex flex-col items-center gap-2 text-white">
+                <Upload className="h-12 w-12" />
+                <p className="text-lg font-semibold">Drop files to upload</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Input area */}

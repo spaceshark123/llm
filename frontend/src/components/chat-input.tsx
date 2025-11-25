@@ -21,6 +21,7 @@ interface ChatInputProps {
 export function ChatInput({ onSendMessage, onFilesAdded, onUrlAdded, isGenerating = false, responseReady = false, onStopGeneration, onAnswerNow, streamingStarted = false, controlsLocked = false }: ChatInputProps) {
   const [input, setInput] = useState("")
   const [urlInput, setUrlInput] = useState("")
+  const [isDragOverInput, setIsDragOverInput] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleSend = () => {
@@ -38,17 +39,7 @@ export function ChatInput({ onSendMessage, onFilesAdded, onUrlAdded, isGeneratin
   }
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.currentTarget.files || [])
-    const validFiles = files.filter((file) => {
-      const ext = file.name.split(".").pop()?.toLowerCase()
-      return ["pdf", "txt", "doc", "docx"].includes(ext || "")
-    })
-
-    if (validFiles.length > 0) {
-      onFilesAdded(validFiles)
-    } else {
-      alert("Please upload PDF, TXT, DOC, or DOCX files only.")
-    }
+    validateAndProcessFiles(e.currentTarget.files)
 
     // Reset input
     if (fileInputRef.current) {
@@ -66,6 +57,41 @@ export function ChatInput({ onSendMessage, onFilesAdded, onUrlAdded, isGeneratin
         alert("Please enter a valid URL.")
       }
     }
+  }
+
+  const validateAndProcessFiles = (files: FileList | null) => {
+    if (!files) return
+
+    const fileArray = Array.from(files)
+    const validFiles = fileArray.filter((file) => {
+      const ext = file.name.split(".").pop()?.toLowerCase()
+      return ["pdf", "txt", "doc", "docx"].includes(ext || "")
+    })
+
+    if (validFiles.length > 0) {
+      onFilesAdded(validFiles)
+    } else if (fileArray.length > 0) {
+      alert("Please upload PDF, TXT, DOC, or DOCX files only.")
+    }
+  }
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOverInput(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOverInput(false)
+  }
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOverInput(false)
+    validateAndProcessFiles(e.dataTransfer.files)
   }
 
   return (
@@ -127,15 +153,24 @@ export function ChatInput({ onSendMessage, onFilesAdded, onUrlAdded, isGeneratin
             </DialogContent>
           </Dialog>
 
-          {/* Message input */}
-          <Input
-            placeholder="Ask a question about your sources..."
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={isGenerating}
-            className="flex-1"
-          />
+          {/* Message input with drag-and-drop */}
+          <div
+            className={`flex-1 transition-colors ${
+              isDragOverInput ? "rounded bg-primary/10" : ""
+            }`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            <Input
+              placeholder="Ask a question about your sources... (or drag files here)"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={isGenerating}
+              className="flex-1"
+            />
+          </div>
 
           {/* Send/Stop/Answer Now buttons */}
           {isGenerating ? (
@@ -156,7 +191,7 @@ export function ChatInput({ onSendMessage, onFilesAdded, onUrlAdded, isGeneratin
             </Button>
           )}
         </div>
-        <p className="text-xs text-muted-foreground text-center">Shift + Enter for new line</p>
+        <p className="text-xs text-muted-foreground text-center">Shift + Enter for new line • Drag files to upload</p>
       </div>
     </div>
   )
