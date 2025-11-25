@@ -154,7 +154,7 @@ export function ChatInterface({
             <Button variant="ghost" size="sm" onClick={() => setSidebarOpen(!sidebarOpen)}>
               <Menu className="h-5 w-5" />
             </Button>
-            <h2 className="text-lg font-semibold text-foreground">Assistant</h2>
+            <h2 className="text-lg font-semibold text-foreground">Assistant{sessions[currentSessionIndex]?.name ? ": " + sessions[currentSessionIndex]?.name : ""}</h2>
           </div>
         </div>
 
