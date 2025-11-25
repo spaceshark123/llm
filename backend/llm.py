@@ -5,6 +5,7 @@ from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_core.chat_history import InMemoryChatMessageHistory
 import os
 from dotenv import load_dotenv
+from history import ChatMessageHistoryWithTimestamps
 
 # Load environment variables
 load_dotenv()
@@ -37,10 +38,10 @@ chain = prompt | llm | StrOutputParser()
 # Session store
 store = {}
 
-def get_session_history(session_id: str) -> InMemoryChatMessageHistory:
+def get_session_history(session_id: str) -> ChatMessageHistoryWithTimestamps:
     """Return or create message history for a session."""
     if session_id not in store:
-        store[session_id] = InMemoryChatMessageHistory()
+        store[session_id] = ChatMessageHistoryWithTimestamps()
     return store[session_id]
 
 # Wrap chain with message history

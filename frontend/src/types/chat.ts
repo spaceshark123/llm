@@ -3,7 +3,7 @@ export interface ChatMessage {
   role: "user" | "assistant"
   content: string
   sources: string[]
-  timestamp: Date
+  timestamp: string | Date | null // can be string (ISO format) or Date
   isStreaming?: boolean
   truncatedContent?: string
 }

@@ -4,6 +4,7 @@ import os
 from llm import chat, get_session_history, clear_session
 from langchain_core.messages import HumanMessage, AIMessage
 from dotenv import load_dotenv
+from history import ChatMessageHistoryWithTimestamps
 
 load_dotenv()
 PORT = int(os.getenv('BACKEND_PORT', 5050))
@@ -69,7 +70,7 @@ def history_endpoint():
 }
 
         '''
-        history = get_session_history(session_id)
+        history = get_session_history(session_id).get_messages_with_timestamps()
         print("Fetched history for session:", session_id, history)
         history_serialized = [
             {
@@ -77,11 +78,11 @@ def history_endpoint():
                 'role': 'assistant' if isinstance(msg, AIMessage) else 'user',
                 'content': msg.content,
                 'sources': [],
-                'timestamp': None,
+                'timestamp': timestamp.isoformat(),
                 'isStreaming': False,
                 'truncatedContent': msg.content,
             }
-            for (index, msg) in enumerate(history.messages)
+            for (index, (msg, timestamp)) in enumerate(history)
         ]
         return jsonify({'history': history_serialized}), 200
 
