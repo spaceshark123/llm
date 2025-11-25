@@ -159,10 +159,9 @@ export function ChatInterface({
         </div>
 
         {/* Chat messages and source manager */}
-        <div 
-          className={`flex-1 w-full overflow-y-auto transition-colors relative ${
-            isDragOverChat ? "bg-primary/5" : ""
-          }`}
+        <div
+          className={`flex-1 w-full overflow-y-auto transition-colors relative ${isDragOverChat ? "bg-primary/5" : ""
+            }`}
           onDragOver={handleChatDragOver}
           onDragLeave={handleChatDragLeave}
           onDrop={handleChatDrop}
@@ -179,7 +178,9 @@ export function ChatInterface({
             )}
 
             {/* Messages */}
-            <ChatMessages messages={messages} onStreamingComplete={onStreamingComplete} onStreamingStart={onStreamingStart} />
+            <div className="w-full scroll-auto">
+              <ChatMessages messages={messages} onStreamingComplete={onStreamingComplete} onStreamingStart={onStreamingStart} />
+            </div>
           </div>
 
           {/* Drag overlay hint */}
@@ -195,9 +196,9 @@ export function ChatInterface({
 
         {/* Input area */}
         <div className="border-t">
-          <ChatInput 
-            onSendMessage={onSendMessage} 
-            onFilesAdded={onFilesAdded} 
+          <ChatInput
+            onSendMessage={onSendMessage}
+            onFilesAdded={onFilesAdded}
             onUrlAdded={onUrlAdded}
             isGenerating={isGenerating}
             responseReady={responseReady}
