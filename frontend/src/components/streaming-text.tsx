@@ -1,7 +1,14 @@
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, memo } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import rehypeHighlight from "rehype-highlight"
+
+// Memoized markdown renderer to avoid re-parsing during streaming
+const MarkdownDisplay = memo(({ content }: { content: string }) => (
+  <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+    {content}
+  </ReactMarkdown>
+))
 
 interface StreamingTextProps {
   content: string
@@ -13,7 +20,7 @@ interface StreamingTextProps {
   answerNow?: boolean
 }
 
-export function StreamingText({ content, isStreaming = false, speed = 0.5, onFinishStreaming, truncatedContent, onStartStreaming, answerNow = false }: StreamingTextProps) {
+export function StreamingText({ content, isStreaming = false, speed = 6.25, onFinishStreaming, truncatedContent, onStartStreaming, answerNow = false }: StreamingTextProps) {
   const [displayedContent, setDisplayedContent] = useState("")
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isAnimating, setIsAnimating] = useState(false)
@@ -22,7 +29,6 @@ export function StreamingText({ content, isStreaming = false, speed = 0.5, onFin
   const previousStreamingRef = useRef(isStreaming)
   const hasHandledStopRef = useRef(false)
   const hasStartedRef = useRef(false)
-  const previousTruncatedRef = useRef<string | undefined>(undefined)
 
   // Reset when content changes (new message)
   useEffect(() => {
@@ -53,8 +59,7 @@ export function StreamingText({ content, isStreaming = false, speed = 0.5, onFin
 
   // Handle stop command only
   useEffect(() => {
-    if (truncatedContent === "__TRUNCATE__" && previousTruncatedRef.current !== "__TRUNCATE__") {
-      previousTruncatedRef.current = truncatedContent
+    if (truncatedContent === "__TRUNCATE__") {
       // Clear any pending animation timer
       if (timerRef.current !== null) {
         clearTimeout(timerRef.current)
@@ -75,11 +80,22 @@ export function StreamingText({ content, isStreaming = false, speed = 0.5, onFin
       setDisplayedContent(content)
       setCurrentIndex(content.length)
       setIsAnimating(false)
-      if (onFinishStreaming) {
-        onFinishStreaming()
-      }
+      // Defer the completion callback to ensure displayedContent state update commits first
+      const timeoutId = setTimeout(() => {
+        if (onFinishStreaming) {
+          onFinishStreaming()
+        }
+      }, 0)
+      return () => clearTimeout(timeoutId)
     }
   }, [answerNow, content, onFinishStreaming])
+
+  // Debounce markdown rendering to avoid expensive re-parses during streaming
+  useEffect(() => {
+    // Show markdown as we stream
+    // No need for debounce - memoization handles the expensive part
+    return () => {}
+  }, [displayedContent, isAnimating])
 
   // Handle streaming animation
   useEffect(() => {
@@ -103,10 +119,11 @@ export function StreamingText({ content, isStreaming = false, speed = 0.5, onFin
       return
     }
 
-    // Schedule next character
+    // Schedule next character - batch update content and index together
+    const nextIndex = currentIndex + 1
     timerRef.current = window.setTimeout(() => {
-      setCurrentIndex(prev => prev + 1)
-      setDisplayedContent(content.slice(0, currentIndex + 1))
+      setCurrentIndex(nextIndex)
+      setDisplayedContent(content.slice(0, nextIndex))
     }, speed)
 
     return () => {
@@ -119,9 +136,13 @@ export function StreamingText({ content, isStreaming = false, speed = 0.5, onFin
 
   return (
     <div className="prose prose-neutral dark:prose-invert max-w-none markdown">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
-        {displayedContent}
-      </ReactMarkdown>
+      {displayedContent ? (
+        // Show markdown-formatted content updated in real-time during streaming
+        <MarkdownDisplay content={displayedContent} />
+      ) : (
+        // Fallback: show plain text if content is empty
+        <pre className="whitespace-pre-wrap break-words font-sans text-base">{displayedContent}</pre>
+      )}
       {isAnimating && currentIndex < content.length && (
         <span className="inline-block w-1 h-4 bg-primary animate-pulse ml-1" />
       )}

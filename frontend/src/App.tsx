@@ -185,7 +185,7 @@ this is a test link: [OpenAI](https://www.openai.com)
     // Called when StreamingText finishes animating
     setMessages((prev) => 
       prev.map((msg) => 
-        msg.id === messageId ? { ...msg, isStreaming: false } : msg
+        msg.id === messageId ? { ...msg, isStreaming: false, truncatedContent: undefined } : msg
       )
     )
     if (currentMessageIdRef.current === messageId) {

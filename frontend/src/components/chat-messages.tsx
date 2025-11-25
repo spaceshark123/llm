@@ -14,6 +14,8 @@ interface ChatMessagesProps {
 export function ChatMessages({ messages, onStreamingComplete, onStreamingStart }: ChatMessagesProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const observerRef = useRef<MutationObserver | null>(null)
+  const isStreamingRef = useRef(false)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -23,24 +25,36 @@ export function ChatMessages({ messages, onStreamingComplete, onStreamingStart }
     scrollToBottom()
   }, [messages])
 
-  // Also scroll on any content changes (for streaming)
+  // Manage mutation observer for streaming auto-scroll
   useEffect(() => {
-    // Check if any message is currently streaming
-    const isAnyStreaming = messages.some(msg => msg.isStreaming)
+    // Check if any message is currently streaming OR completing with Answer Now
+    const isAnyStreaming = messages.some(msg => msg.isStreaming || msg.truncatedContent === "__COMPLETE__")
     
-    if (!isAnyStreaming) {
-      return // Don't auto-scroll if nothing is streaming
+    // Only update observer if state actually changed
+    if (isAnyStreaming === isStreamingRef.current) {
+      return
     }
     
-    const observer = new MutationObserver(scrollToBottom)
-    if (scrollRef.current) {
-      observer.observe(scrollRef.current, {
+    isStreamingRef.current = isAnyStreaming
+    
+    if (!isAnyStreaming) {
+      // Stop observing when nothing is streaming
+      if (observerRef.current) {
+        observerRef.current.disconnect()
+        observerRef.current = null
+      }
+      return
+    }
+    
+    // Start observing only when streaming or completing
+    if (!observerRef.current && scrollRef.current) {
+      observerRef.current = new MutationObserver(scrollToBottom)
+      observerRef.current.observe(scrollRef.current, {
         childList: true,
         subtree: true,
         characterData: true,
       })
     }
-    return () => observer.disconnect()
   }, [messages])
 
   return (
