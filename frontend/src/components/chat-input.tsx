@@ -23,15 +23,40 @@ export function ChatInput({ onSendMessage, onFilesAdded, onUrlAdded, isGeneratin
   const [urlInput, setUrlInput] = useState("")
   const [isDragOverInput, setIsDragOverInput] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const handleSend = () => {
-    if (input.trim() && !isGenerating) {
-      onSendMessage(input.trim())
+    // Trim leading/trailing whitespace but preserve internal newlines
+    const trimmedInput = input.trim()
+    if (trimmedInput && !isGenerating) {
+      onSendMessage(trimmedInput)
       setInput("")
+      // Reset textarea height after sending
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto"
+      }
     }
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const adjustTextareaHeight = () => {
+    const textarea = textareaRef.current
+    if (!textarea) return
+
+    // Reset height to auto to get the correct scrollHeight
+    textarea.style.height = "auto"
+    // Set to scrollHeight to expand with content
+    const newHeight = Math.min(textarea.scrollHeight, 120)
+    textarea.style.height = `${newHeight}px`
+    // Auto-scroll to bottom of textarea content
+    textarea.scrollTop = textarea.scrollHeight
+  }
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value)
+    adjustTextareaHeight()
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey && !isGenerating) {
       e.preventDefault()
       handleSend()
@@ -162,13 +187,15 @@ export function ChatInput({ onSendMessage, onFilesAdded, onUrlAdded, isGeneratin
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
           >
-            <Input
+            <textarea
+              ref={textareaRef}
               placeholder="Ask a question about your sources... (or drag files here)"
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               disabled={isGenerating}
-              className="flex-1"
+              className="flex-1 w-full px-3 py-2 rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none min-h-[40px] max-h-[120px] overflow-y-auto"
+              rows={1}
             />
           </div>
 

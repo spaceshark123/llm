@@ -17,9 +17,10 @@ interface StreamingTextProps {
   onFinishStreaming?: () => void
   truncatedContent?: string
   onStartStreaming?: () => void
+  isUserMessage?: boolean
 }
 
-export function StreamingText({ content, isStreaming = false, speed = 6.25, onFinishStreaming, truncatedContent, onStartStreaming}: StreamingTextProps) {
+export function StreamingText({ content, isStreaming = false, speed = 6.25, onFinishStreaming, truncatedContent, onStartStreaming, isUserMessage = false}: StreamingTextProps) {
   const [displayedContent, setDisplayedContent] = useState("")
   const [showAll, setShowAll] = useState(false)
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -134,7 +135,7 @@ export function StreamingText({ content, isStreaming = false, speed = 6.25, onFi
   }, [isAnimating, currentIndex, content, speed, onFinishStreaming])
 
   return (
-    <div className="prose prose-neutral dark:prose-invert max-w-none markdown">
+    <div className={`prose prose-neutral dark:prose-invert max-w-none markdown ${isUserMessage ? "whitespace-pre-wrap" : ""}`}>
       {displayedContent ? (
         // Show markdown-formatted content updated in real-time during streaming
         <MarkdownDisplay content={showAll ? content : displayedContent} />

@@ -92,6 +92,7 @@ export function ChatMessages({ messages, onStreamingComplete, onStreamingStart }
               truncatedContent={message.truncatedContent}
               onFinishStreaming={() => onStreamingComplete?.(message.id)}
               onStartStreaming={() => onStreamingStart?.(message.id)}
+              isUserMessage={message.role === "user"}
             />
 
             {/* Sources */}
