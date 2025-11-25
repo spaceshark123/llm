@@ -1,44 +1,69 @@
 from langchain_groq import ChatGroq
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
-import json
+from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain_core.chat_history import InMemoryChatMessageHistory
 import os
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
+
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 if not GROQ_API_KEY:
     raise ValueError("GROQ_API_KEY is not set in environment variables.")
-TEMPERATURE = float(os.getenv("TEMPERATURE", 0.7))
+
+TEMPERATURE = float(os.getenv("TEMPERATURE", "0.7"))
 MODEL_NAME = os.getenv("MODEL_NAME", "llama-3.1-8b-instant")
+SYSTEM_PROMPT = """You are a helpful and knowledgeable AI assistant. Respond in markdown."""
 
-SYSTEM_PROMPT = """You are a helpful and knowledgeable AI LLM assistant that answers questions. Your responses should be formatted in markdown."""
-
-# Initialize Groq LLM
+# Initialize LLM
 llm = ChatGroq(
     model_name=MODEL_NAME,
     temperature=TEMPERATURE,
-    api_key=GROQ_API_KEY
+    api_key=GROQ_API_KEY,
 )
 
-# Create a simple prompt
+# Prompt with history placeholder
 prompt = ChatPromptTemplate.from_messages([
     ("system", SYSTEM_PROMPT),
-    ("user", "{input}")
+    MessagesPlaceholder(variable_name="chat_history"),
+    ("human", "{input}")
 ])
 
-parser = StrOutputParser()
+# Create chain
+chain = prompt | llm | StrOutputParser()
 
-# Create the chain
-chain = prompt | llm | parser
+# Session store
+store = {}
 
-def chat(input: str) -> dict:
-    result = chain.invoke({"input": input})
-    return result
+def get_session_history(session_id: str) -> InMemoryChatMessageHistory:
+    """Return or create message history for a session."""
+    if session_id not in store:
+        store[session_id] = InMemoryChatMessageHistory()
+    return store[session_id]
+
+# Wrap chain with message history
+chat_with_history = RunnableWithMessageHistory(
+    chain,
+    get_session_history=get_session_history,
+    input_messages_key="input",
+    history_messages_key="chat_history",
+)
+
+def chat(input_str: str, session_id: str = "default") -> str:
+    """Send a message and get a response with conversation history."""
+    response = chat_with_history.invoke(
+        {"input": input_str},
+        config={"configurable": {"session_id": session_id}}
+    )
+    return response
 
 # Example usage
 if __name__ == "__main__":
-    user = """What is the capital of France?"""
-    response = chat(user)
-    print("Response:", response)
+    print("User: Hi, my name is Joe.")
+    print("Assistant:", chat("Hi, my name is Joe."))
+    print("\nUser: What's my name?")
+    print("Assistant:", chat("What's my name?"))
+    # test getting session history
+    print("session history:", get_session_history("default").messages)
