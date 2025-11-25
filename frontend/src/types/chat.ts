@@ -4,4 +4,6 @@ export interface ChatMessage {
   content: string
   sources: string[]
   timestamp: Date
+  isStreaming?: boolean
+  truncatedContent?: string
 }

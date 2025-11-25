@@ -16,6 +16,14 @@ interface ChatInterfaceProps {
   onRemoveFile: (index: number) => void
   onRemoveUrl: (index: number) => void
   onClearChat: () => void
+  isGenerating?: boolean
+  responseReady?: boolean
+  onStopGeneration?: () => void
+  onAnswerNow?: () => void
+  onStreamingComplete?: (messageId: string) => void
+  onStreamingStart?: (messageId: string) => void
+  streamingStarted?: boolean
+  controlsLocked?: boolean
 }
 
 export function ChatInterface({
@@ -28,6 +36,14 @@ export function ChatInterface({
   onRemoveFile,
   onRemoveUrl,
   onClearChat,
+  isGenerating = false,
+  responseReady = false,
+  onStopGeneration,
+  onAnswerNow,
+  onStreamingComplete,
+  onStreamingStart,
+  streamingStarted = false,
+  controlsLocked = false,
 }: ChatInterfaceProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
@@ -35,7 +51,7 @@ export function ChatInterface({
     <div className="flex w-screen h-screen bg-background">
       <div
         className={`${sidebarOpen ? "w-64" : "w-0"
-          } transition-all duration-300 bg-card border-r border-border flex flex-col`}
+          } transition-all duration-300 bg-card border-r border-border flex flex-col overflow-hidden`}
       >
         <div className="p-4 border-b border-border">
           <h1 className="text-xl font-bold text-foreground">LLM Chat</h1>
@@ -63,7 +79,7 @@ export function ChatInterface({
         {/* Header */}
         <div className="border-b border-border bg-card px-6 py-4 flex items-center justify-between w-full z-50">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" onClick={() => setSidebarOpen(!sidebarOpen)} className="lg:hidden">
+            <Button variant="ghost" size="sm" onClick={() => setSidebarOpen(!sidebarOpen)}>
               <Menu className="h-5 w-5" />
             </Button>
             <h2 className="text-lg font-semibold text-foreground">Assistant</h2>
@@ -84,13 +100,23 @@ export function ChatInterface({
             )}
 
             {/* Messages */}
-            <ChatMessages messages={messages} />
+            <ChatMessages messages={messages} onStreamingComplete={onStreamingComplete} onStreamingStart={onStreamingStart} />
           </div>
         </div>
 
         {/* Input area */}
         <div className="border-t">
-          <ChatInput onSendMessage={onSendMessage} onFilesAdded={onFilesAdded} onUrlAdded={onUrlAdded} />
+          <ChatInput 
+            onSendMessage={onSendMessage} 
+            onFilesAdded={onFilesAdded} 
+            onUrlAdded={onUrlAdded}
+            isGenerating={isGenerating}
+            responseReady={responseReady}
+            onStopGeneration={onStopGeneration}
+            onAnswerNow={onAnswerNow}
+            streamingStarted={streamingStarted}
+            controlsLocked={controlsLocked}
+          />
         </div>
       </div>
     </div>

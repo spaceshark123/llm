@@ -3,33 +3,35 @@ import type React from "react"
 import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Send, Paperclip, LinkIcon, Loader2 } from "lucide-react"
+import { Send, Paperclip, LinkIcon, Square, Zap } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
 interface ChatInputProps {
   onSendMessage: (message: string) => void
   onFilesAdded: (files: File[]) => void
   onUrlAdded: (url: string) => void
+  isGenerating?: boolean
+  responseReady?: boolean
+  onStopGeneration?: () => void
+  onAnswerNow?: () => void
+  streamingStarted?: boolean
+  controlsLocked?: boolean
 }
 
-export function ChatInput({ onSendMessage, onFilesAdded, onUrlAdded }: ChatInputProps) {
+export function ChatInput({ onSendMessage, onFilesAdded, onUrlAdded, isGenerating = false, responseReady = false, onStopGeneration, onAnswerNow, streamingStarted = false, controlsLocked = false }: ChatInputProps) {
   const [input, setInput] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
   const [urlInput, setUrlInput] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleSend = () => {
-    if (input.trim()) {
-      setIsLoading(true)
+    if (input.trim() && !isGenerating) {
       onSendMessage(input.trim())
       setInput("")
-      // Reset loading after response
-      setTimeout(() => setIsLoading(false), 1100)
     }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey && !isGenerating) {
       e.preventDefault()
       handleSend()
     }
@@ -131,14 +133,28 @@ export function ChatInput({ onSendMessage, onFilesAdded, onUrlAdded }: ChatInput
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            disabled={isLoading}
+            disabled={isGenerating}
             className="flex-1"
           />
 
-          {/* Send button */}
-          <Button onClick={handleSend} disabled={!input.trim() || isLoading} size="icon">
-            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          </Button>
+          {/* Send/Stop/Answer Now buttons */}
+          {isGenerating ? (
+            <>
+              <Button onClick={onStopGeneration} disabled={!streamingStarted || !responseReady || controlsLocked} variant="destructive" size="icon" title="Stop generating">
+                <Square className="h-4 w-4" />
+              </Button>
+              {responseReady && (
+                <Button onClick={onAnswerNow} disabled={controlsLocked} variant="outline" size="sm" title="Complete answer instantly" className="gap-2">
+                  <Zap className="h-4 w-4" />
+                  Answer Now
+                </Button>
+              )}
+            </>
+          ) : (
+            <Button onClick={handleSend} disabled={!input.trim()} size="icon" title="Send message">
+              <Send className="h-4 w-4" />
+            </Button>
+          )}
         </div>
         <p className="text-xs text-muted-foreground text-center">Shift + Enter for new line</p>
       </div>

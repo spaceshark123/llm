@@ -3,21 +3,44 @@ import type { ChatMessage } from "@/types/chat"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { MessageCircle, Sparkles } from "lucide-react"
 import 'highlight.js/styles/github-dark.css';
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import rehypeHighlight from "rehype-highlight";
+import { StreamingText } from "./streaming-text"
 
 interface ChatMessagesProps {
   messages: ChatMessage[]
+  onStreamingComplete?: (messageId: string) => void
+  onStreamingStart?: (messageId: string) => void
 }
 
-export function ChatMessages({ messages }: ChatMessagesProps) {
+export function ChatMessages({ messages, onStreamingComplete, onStreamingStart }: ChatMessagesProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    scrollToBottom()
+  }, [messages])
+
+  // Also scroll on any content changes (for streaming)
+  useEffect(() => {
+    // Check if any message is currently streaming
+    const isAnyStreaming = messages.some(msg => msg.isStreaming)
+    
+    if (!isAnyStreaming) {
+      return // Don't auto-scroll if nothing is streaming
     }
+    
+    const observer = new MutationObserver(scrollToBottom)
+    if (scrollRef.current) {
+      observer.observe(scrollRef.current, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+      })
+    }
+    return () => observer.disconnect()
   }, [messages])
 
   return (
@@ -48,14 +71,15 @@ export function ChatMessages({ messages }: ChatMessagesProps) {
                 })}
               </span>
             </div>
-            <div className="prose prose-neutral dark:prose-invert max-w-none markdown">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}      // enables tables, strikethrough, etc.
-                rehypePlugins={[rehypeHighlight]} // enables syntax highlighting
-              >
-                {message.content}
-              </ReactMarkdown>
-            </div>
+            <StreamingText 
+              content={message.content} 
+              isStreaming={message.isStreaming}
+              speed={0.5}
+              truncatedContent={message.truncatedContent}
+              onFinishStreaming={() => onStreamingComplete?.(message.id)}
+              onStartStreaming={() => onStreamingStart?.(message.id)}
+              answerNow={message.truncatedContent === "__COMPLETE__"}
+            />
 
             {/* Sources */}
             {message.sources && message.sources.length > 0 && (
@@ -76,6 +100,7 @@ export function ChatMessages({ messages }: ChatMessagesProps) {
           </div>
         </div>
       ))}
+      <div ref={messagesEndRef} />
     </div>
   )
 }
