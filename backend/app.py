@@ -353,7 +353,9 @@ def source_endpoint():
 		session_folder = os.path.join(DATA_PATH, session_id)
 		if not os.path.exists(session_folder):
 			return jsonify({'files': []}), 200
-		files = [f[:-3] for f in os.listdir(session_folder) if f.endswith('.md')]
+		file_names = [f[:-3] for f in os.listdir(session_folder) if f.endswith('.md')]
+		extensions = [file.rsplit('.', 1)[-1].lower() for file in file_names]
+		files = [{'name': name, 'extension': ext} for name, ext in zip(file_names, extensions)]
 		return jsonify({'files': files}), 200
 
 # get/clear session history endpoint

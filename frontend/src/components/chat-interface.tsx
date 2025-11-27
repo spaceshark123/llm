@@ -181,17 +181,15 @@ export function ChatInterface({
           <div className="space-y-4">
             {/* New Chat Section */}
             <div className="space-y-2">
-              {messages.length > 0 && (
-                <Button
-                  onClick={onClearChat}
-                  variant="outline"
-                  size="sm"
-                  className="w-full justify-start gap-2 bg-transparent cursor-pointer"
-                >
-                  <SquarePen className="h-4 w-4" />
-                  New Chat
-                </Button>
-              )}
+              <Button
+                onClick={onClearChat}
+                variant="outline"
+                size="sm"
+                className="w-full justify-start gap-2 bg-transparent cursor-pointer"
+              >
+                <SquarePen className="h-4 w-4" />
+                New Chat
+              </Button>
             </div>
 
             {/* Chat History Section */}
@@ -246,7 +244,7 @@ export function ChatInterface({
             <div className="w-full scroll-auto">
               {/* Sources section */}
               <div className="sticky top-0 z-40 bg-background border-b border-border">
-                {(uploadedFiles.length > 0 || uploadedUrls.length > 0) && (
+                {(uploadedFiles.length > 0 || uploadedUrls.length > 0 || processingFiles.size > 0) && (
                   <SourceManager
                     files={uploadedFiles}
                     urls={uploadedUrls}

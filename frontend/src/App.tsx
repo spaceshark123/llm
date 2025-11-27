@@ -75,7 +75,7 @@ function App() {
   }
 
   useEffect(() => {
-    if(isGenerating) return; // do not change messages while generating
+    if (isGenerating) return; // do not change messages while generating
     // update messages when current session changes to non -1
     if (currentSessionIndex !== -1) {
       const sessionId = sessions[currentSessionIndex]?.id
@@ -104,6 +104,55 @@ function App() {
           .catch((error) => {
             console.error("Error fetching history:", error)
           })
+        // fetch sources if this is switching to an existing session, not a new one
+        fetch(`${API_URL}/history`, {
+          method: 'GET',
+          headers: {
+            'Session-ID': sessionId,
+          },
+        }).then((response) => response.json())
+          .then((data) => {
+            // if history is empty, do not fetch sources
+            if (data.history && data.history.length > 0) {
+              fetchSourcesForSession(sessionId)
+            }
+          })
+          .catch((error) => {
+            console.error("Error fetching history for sources check:", error)
+          })
+        const fetchSourcesForSession = async (sessionId: string) => {
+          fetch(`${API_URL}/sources`, {
+            method: 'GET',
+            headers: {
+              'Session-ID': sessionId,
+            },
+          })
+            .then((response) => response.json())
+            .then((data) => {
+              console.log("Fetched sources for session:", currentSessionIndex, data)
+              // populate uploadedFiles and uploadedUrls based on data
+              const files: File[] = []
+              const urls: string[] = []
+              data.files.forEach((fileInfo: { name: string; extension: string }) => {
+                if (['pdf', 'txt', 'docx'].includes(fileInfo.extension)) {
+                  // create a dummy File object since we can't get the original file
+                  const dummyFile = new File([""], fileInfo.name, { type: "application/octet-stream" })
+                  files.push(dummyFile)
+                } else if (['png', 'jpg', 'jpeg', 'gif', 'bmp'].includes(fileInfo.extension)) {
+                  const dummyFile = new File([""], fileInfo.name, { type: "image/" + fileInfo.extension })
+                  files.push(dummyFile)
+                } else {
+                  // treat as URL
+                  urls.push(fileInfo.name)
+                }
+              })
+              setUploadedFiles(files)
+              setUploadedUrls(urls)
+            })
+            .catch((error) => {
+              console.error("Error fetching sources:", error)
+            })
+        }
       }
     } else {
       // reset to initial message
@@ -138,14 +187,14 @@ function App() {
     const fileContents: { [key: string]: string } = {}
     const pdfFiles: File[] = []
     const imageFiles: File[] = []
-    
+
     uploadedFiles.forEach((file, fileIndex) => {
       // Skip files that are not selected
       if (!selectedFilesRef.current.has(fileIndex)) {
         console.log(`Skipping deselected file: ${file.name}`)
         return
       }
-      
+
       const fileId = `${file.name}-${file.size}-${file.lastModified}`
       const ocrContent = fileOcrContent.get(fileId)
       if (ocrContent) {
@@ -155,7 +204,7 @@ function App() {
           size: file.size,
         })
         fileContents[file.name] = ocrContent
-        
+
         // Collect PDF files for multipart upload
         if (file.type === 'application/pdf') {
           pdfFiles.push(file)
@@ -166,7 +215,7 @@ function App() {
         }
       }
     })
-    
+
     // Filter URLs to only include selected ones
     const selectedUrls = uploadedUrls.filter((_, urlIndex) => {
       const isSelected = selectedUrlsRef.current.has(urlIndex)
@@ -247,17 +296,17 @@ function App() {
         formData.append('fileContents', JSON.stringify(fileContents))
         formData.append('fileMetadata', JSON.stringify(fileMetadata))
         formData.append('urls', JSON.stringify(selectedUrls))
-        
+
         // Append each PDF file
         pdfFiles.forEach((file) => {
           formData.append('pdf_files', file, file.name)
         })
-        
+
         // Append each image file for backend EasyOCR processing
         imageFiles.forEach((file) => {
           formData.append('image_files', file, file.name)
         })
-        
+
         response = await fetch(`${API_URL}/chat`, {
           method: 'POST',
           headers: {
@@ -283,7 +332,7 @@ function App() {
           signal: controller.signal,
         })
       }
-      
+
       data = await response.json();
       console.log("Backend response:", data);
     } catch (error) {
@@ -373,7 +422,7 @@ function App() {
           return formData
         })(),
       })
-      
+
       // For now, we skip client-side OCR and let backend handle all files
       setFileOcrContent((prev) => new Map([...prev, [fileId, `File ${file.name} will be processed by the server.`]]))
       setProcessingFiles((prev) => {
@@ -382,7 +431,7 @@ function App() {
         return newSet
       })
       // console.log(`Starting OCR processing for: ${file.name}`)
-      
+
       // try {
       //   const text = await extractTextFromFile(file)
       //   console.log(`OCR completed for ${file.name}, extracted ${text.length} characters`)
