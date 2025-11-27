@@ -341,28 +341,61 @@ function App() {
     // Add files to uploaded list
     setUploadedFiles((prev) => [...prev, ...files])
     console.log("Processing files:", files.map(f => f.name))
-    
+
+    // if session index is -1, create a new session since user is adding files
+    let sessionId = "";
+    if (currentSessionIndex === -1) {
+      // create a new session id
+      sessionId = `session-${Date.now()}`
+      // name after first message
+      const newSessionName = files[0].name.slice(0, 20) + (files[0].name.length > 20 ? "..." : "")
+      const newSession: Session = { id: sessionId, name: newSessionName }
+      setCurrentSessionIndex(sessions.length)
+      setSessions((prev) => [...prev, newSession])
+    } else {
+      sessionId = sessions[currentSessionIndex]?.id
+    }
+
     // Process each file with OCR
     for (const file of files) {
       const fileId = `${file.name}-${file.size}-${file.lastModified}`
       setProcessingFiles((prev) => new Set([...prev, fileId]))
-      console.log(`Starting OCR processing for: ${file.name}`)
+      await fetch(API_URL + '/sources', {
+        method: 'POST',
+        headers: {
+          'Session-ID': sessionId,
+        },
+        body: (() => {
+          const formData = new FormData()
+          formData.append('file', file, file.name)
+          return formData
+        })(),
+      })
       
-      try {
-        const text = await extractTextFromFile(file)
-        console.log(`OCR completed for ${file.name}, extracted ${text.length} characters`)
-        setFileOcrContent((prev) => new Map([...prev, [fileId, text]]))
-      } catch (error) {
-        console.error(`Failed to process file ${file.name}:`, error)
-        // Still mark as processed even if failed, but with empty content
-        setFileOcrContent((prev) => new Map([...prev, [fileId, ""]]))
-      } finally {
-        setProcessingFiles((prev) => {
-          const newSet = new Set(prev)
-          newSet.delete(fileId)
-          return newSet
-        })
-      }
+      // For now, we skip client-side OCR and let backend handle all files
+      setFileOcrContent((prev) => new Map([...prev, [fileId, `File ${file.name} will be processed by the server.`]]))
+      setProcessingFiles((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(fileId)
+        return newSet
+      })
+      // console.log(`Starting OCR processing for: ${file.name}`)
+      
+      // try {
+      //   const text = await extractTextFromFile(file)
+      //   console.log(`OCR completed for ${file.name}, extracted ${text.length} characters`)
+      //   setFileOcrContent((prev) => new Map([...prev, [fileId, text]]))
+      // } catch (error) {
+      //   console.error(`Failed to process file ${file.name}:`, error)
+      //   // Still mark as processed even if failed, but with empty content
+      //   setFileOcrContent((prev) => new Map([...prev, [fileId, ""]]))
+      // } finally {
+      //   setProcessingFiles((prev) => {
+      //     const newSet = new Set(prev)
+      //     newSet.delete(fileId)
+      //     return newSet
+      //   })
+      // }
     }
   }
 
@@ -450,8 +483,16 @@ function App() {
     setUploadedUrls((prev) => [...prev, url])
   }
 
-  const handleRemoveFile = (index: number) => {
+  const handleRemoveFile = async (index: number) => {
     setUploadedFiles((prev) => prev.filter((_, i) => i !== index))
+    // Also notify backend to remove stored source if needed
+    await fetch(API_URL + '/sources?filename=' + encodeURIComponent(uploadedFiles[index].name), {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'Session-ID': sessions[currentSessionIndex]?.id || "",
+      },
+    })
   }
 
   const handleRemoveUrl = (index: number) => {

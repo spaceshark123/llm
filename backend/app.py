@@ -41,6 +41,10 @@ def initialize_easyocr():
 # Initialize on startup
 initialize_easyocr()
 
+DATA_DIR = 'data'
+if not os.path.exists(DATA_DIR):
+	os.makedirs(DATA_DIR)
+
 load_dotenv()
 PORT = int(os.getenv('BACKEND_PORT', 5050))
 
@@ -246,21 +250,56 @@ def chat_endpoint():
 	reply = chat(message, session_id=session_id, file_contents=file_contents, file_metadata=files, urls=urls)
 	return jsonify({'reply': reply})
 
+# upload/delete source
+@app.route('/api/sources', methods=['POST', 'DELETE'])
+def source_endpoint():
+	session_id = request.headers.get('Session-ID')
+	if not session_id or session_id.strip() == "":
+		return jsonify({'error': 'Session-ID header is required'}), 400
+	
+	if request.method == 'DELETE':
+		# delete file by filename
+		filename = request.args.get('filename')
+		if not filename:
+			return jsonify({'error': 'filename parameter is required for DELETE'}), 400
+		session_folder = os.path.join(DATA_DIR, session_id)
+		file_path = os.path.join(session_folder, filename)
+		if os.path.exists(file_path):
+			os.remove(file_path)
+			return jsonify({'message': f'File {filename} deleted from session {session_id}'}), 200
+		else:
+			return jsonify({'error': f'File {filename} not found in session {session_id}'}), 404
+	elif request.method == 'POST':
+		if 'file' not in request.files:
+			return jsonify({'error': 'No file part in the request'}), 400
+
+		file = request.files['file']
+		if file.filename == '':
+			return jsonify({'error': 'No selected file'}), 400
+		
+		# store file in data folder in session subfolder
+		session_folder = os.path.join(DATA_DIR, session_id)
+		if not os.path.exists(session_folder):
+			os.makedirs(session_folder)
+		file_path = os.path.join(session_folder, file.filename)
+		file.save(file_path)
+		return jsonify({'message': f'File saved to {file_path}'}), 200
+
 # get/clear session history endpoint
 @app.route('/api/history', methods=['GET', 'DELETE'])
 def history_endpoint():
-    session_id = request.headers.get('Session-ID')
-    print("history request for session:", session_id)
-    if not session_id:
-        return jsonify({'error': 'Session-ID header is required'}), 400
-    
-    if request.method == 'DELETE':
-        clear_session(session_id)
-        return jsonify({'message': 'Session cleared'}), 200
-    
-    if request.method == 'GET':
-        '''
-        export interface ChatMessage {
+	session_id = request.headers.get('Session-ID')
+	print("history request for session:", session_id)
+	if not session_id:
+		return jsonify({'error': 'Session-ID header is required'}), 400
+	
+	if request.method == 'DELETE':
+		clear_session(session_id)
+		return jsonify({'message': 'Session cleared'}), 200
+	
+	if request.method == 'GET':
+		'''
+		export interface ChatMessage {
   id: string
   role: "user" | "assistant"
   content: string
@@ -270,25 +309,25 @@ def history_endpoint():
   truncatedContent?: string
 }
 
-        '''
-        session_history = get_session_history(session_id)
-        history = session_history.get_messages_with_timestamps()
-        print("Fetched history for session:", session_id, history)
-        history_serialized = [
-            {
-                'id': str(index),
-                'role': 'assistant' if isinstance(msg, AIMessage) else 'user',
-                'content': msg.content,
-                'sources': session_history.get_message_metadata(index).get('sources', []),
-                'timestamp': timestamp.isoformat(),
-                'isStreaming': False,
-                'truncatedContent': msg.content,
-                'fileMetadata': session_history.get_message_metadata(index).get('fileMetadata'),
-                'urls': session_history.get_message_metadata(index).get('urls'),
-            }
-            for (index, (msg, timestamp)) in enumerate(history)
-        ]
-        return jsonify({'history': history_serialized}), 200
+		'''
+		session_history = get_session_history(session_id)
+		history = session_history.get_messages_with_timestamps()
+		print("Fetched history for session:", session_id, history)
+		history_serialized = [
+			{
+				'id': str(index),
+				'role': 'assistant' if isinstance(msg, AIMessage) else 'user',
+				'content': msg.content,
+				'sources': session_history.get_message_metadata(index).get('sources', []),
+				'timestamp': timestamp.isoformat(),
+				'isStreaming': False,
+				'truncatedContent': msg.content,
+				'fileMetadata': session_history.get_message_metadata(index).get('fileMetadata'),
+				'urls': session_history.get_message_metadata(index).get('urls'),
+			}
+			for (index, (msg, timestamp)) in enumerate(history)
+		]
+		return jsonify({'history': history_serialized}), 200
 
 if __name__ == '__main__':
 	app.run(port=PORT, debug=True)

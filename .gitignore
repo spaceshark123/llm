@@ -38,3 +38,8 @@ venv.bak/
 # env
 .env
 .env.*.local
+
+# data
+data/
+*.db
+*.sqlite3
