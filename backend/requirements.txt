@@ -6,6 +6,7 @@ charset-normalizer==3.4.4
 click==8.3.1
 distro==1.9.0
 dotenv==0.9.9
+easyocr==1.7.1
 Flask==3.1.2
 flask-cors==6.0.1
 groq==0.36.0
@@ -32,6 +33,7 @@ packaging==25.0
 pip==24.0
 pydantic==2.12.4
 pydantic_core==2.41.5
+PyMuPDF==1.23.8
 pypdf==5.2.0
 python-dotenv==1.2.1
 PyYAML==6.0.3

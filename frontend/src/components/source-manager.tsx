@@ -1,61 +1,156 @@
 import { Button } from "@/components/ui/button"
-import { X, FileText, Globe } from "lucide-react"
+import { useState } from "react"
+import { X, FileText, Globe, ChevronDown, ChevronUp } from "lucide-react"
 
 interface SourceManagerProps {
   files: File[]
   urls: string[]
   onRemoveFile: (index: number) => void
   onRemoveUrl: (index: number) => void
+  selectedFiles?: Set<number>
+  selectedUrls?: Set<number>
+  onToggleFile?: (index: number) => void
+  onToggleUrl?: (index: number) => void
+  onSelectAllFiles?: () => void
+  onDeselectAllFiles?: () => void
+  onSelectAllUrls?: () => void
+  onDeselectAllUrls?: () => void
 }
 
-export function SourceManager({ files, urls, onRemoveFile, onRemoveUrl }: SourceManagerProps) {
+export function SourceManager({ 
+  files, 
+  urls, 
+  onRemoveFile, 
+  onRemoveUrl,
+  selectedFiles = new Set(Array.from({length: files.length}, (_, i) => i)),
+  selectedUrls = new Set(Array.from({length: urls.length}, (_, i) => i)),
+  onToggleFile,
+  onToggleUrl,
+  onSelectAllFiles,
+  onDeselectAllFiles,
+  onSelectAllUrls,
+  onDeselectAllUrls
+}: SourceManagerProps) {
+  const [expanded, setExpanded] = useState(false)
+
   if (files.length === 0 && urls.length === 0) {
     return null
   }
 
+  const totalSources = files.length + urls.length
+  const selectedCount = selectedFiles.size + selectedUrls.size
+  const allSelected = selectedCount === totalSources
+
   return (
     <div className="border-b border-border bg-muted/30 px-6 py-4">
       <div className="max-w-4xl mx-auto">
-        <p className="text-sm font-semibold text-foreground mb-3">Active Sources</p>
-        <div className="flex flex-wrap gap-2">
-          {/* Files */}
-          {files.map((file, idx) => (
-            <div
-              key={`file-${idx}`}
-              className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 border border-primary/20 rounded-full text-sm"
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <p className="text-sm font-semibold text-foreground">Active Sources ({selectedCount}/{totalSources})</p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setExpanded(!expanded)}
+              className="h-6 w-6 p-0 cursor-pointer"
+              title={expanded ? "Collapse" : "Expand"}
             >
-              <FileText className="h-3.5 w-3.5 text-primary" />
-              <span className="text-foreground truncate max-w-[150px]">{file.name}</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-4 w-4 p-0 hover:bg-primary/20"
-                onClick={() => onRemoveFile(idx)}
-              >
-                <X className="h-3 w-3" />
-              </Button>
-            </div>
-          ))}
-
-          {/* URLs */}
-          {urls.map((url, idx) => (
-            <div
-              key={`url-${idx}`}
-              className="inline-flex items-center gap-2 px-3 py-1.5 bg-accent/10 border border-accent/20 rounded-full text-sm"
+              {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </Button>
+          </div>
+          {totalSources > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (allSelected) {
+                  // Deselect all
+                  onDeselectAllFiles?.()
+                  onDeselectAllUrls?.()
+                } else {
+                  // Select all
+                  onSelectAllFiles?.()
+                  onSelectAllUrls?.()
+                }
+              }}
+              className="text-xs cursor-pointer h-auto px-2 py-1"
+              title={allSelected ? "Deselect all" : "Select all"}
             >
-              <Globe className="h-3.5 w-3.5 text-accent-foreground" />
-              <span className="text-foreground truncate max-w-[150px]">{url}</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-4 w-4 p-0 hover:bg-accent/20"
-                onClick={() => onRemoveUrl(idx)}
-              >
-                <X className="h-3 w-3" />
-              </Button>
-            </div>
-          ))}
+              {allSelected ? "Deselect All" : "Select All"}
+            </Button>
+          )}
         </div>
+        
+        {expanded && (
+          <div className="flex flex-wrap gap-2">
+            {/* Files */}
+            {files.map((file, idx) => {
+              const isSelected = selectedFiles.has(idx)
+              return (
+                <div
+                  key={`file-${idx}`}
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm transition-colors ${
+                    isSelected
+                      ? "bg-primary/10 border border-primary/20"
+                      : "bg-muted border border-muted-foreground/20 opacity-50"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => onToggleFile?.(idx)}
+                    className="h-4 w-4 cursor-pointer"
+                    title="Include/exclude this file"
+                  />
+                  <FileText className="h-3.5 w-3.5 text-primary" />
+                  <span className="text-foreground truncate max-w-[120px]">{file.name}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-4 w-4 p-0 hover:bg-primary/20 cursor-pointer"
+                    onClick={() => onRemoveFile(idx)}
+                    title="Remove file"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              )
+            })}
+
+            {/* URLs */}
+            {urls.map((url, idx) => {
+              const isSelected = selectedUrls.has(idx)
+              return (
+                <div
+                  key={`url-${idx}`}
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm transition-colors ${
+                    isSelected
+                      ? "bg-accent/10 border border-accent/20"
+                      : "bg-muted border border-muted-foreground/20 opacity-50"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => onToggleUrl?.(idx)}
+                    className="h-4 w-4 cursor-pointer"
+                    title="Include/exclude this URL"
+                  />
+                  <Globe className="h-3.5 w-3.5 text-accent-foreground" />
+                  <span className="text-foreground truncate max-w-[120px]">{url}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-4 w-4 p-0 hover:bg-accent/20 cursor-pointer"
+                    onClick={() => onRemoveUrl(idx)}
+                    title="Remove URL"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
   )

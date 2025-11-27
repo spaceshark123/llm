@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { ChatMessages } from "./chat-messages"
 import { ChatInput } from "./chat-input"
 import { SourceManager } from "./source-manager"
@@ -30,6 +30,8 @@ interface ChatInterfaceProps {
   setSessions: (sessions: Session[]) => void
   setCurrentSessionIndex: (index: number) => void
   processingFiles?: Set<string>
+  onSelectedFilesChange?: (selectedFiles: Set<number>) => void
+  onSelectedUrlsChange?: (selectedUrls: Set<number>) => void
 }
 
 export function ChatInterface({
@@ -55,9 +57,31 @@ export function ChatInterface({
   setSessions,
   setCurrentSessionIndex,
   processingFiles = new Set(),
+  onSelectedFilesChange,
+  onSelectedUrlsChange,
 }: ChatInterfaceProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [isDragOverChat, setIsDragOverChat] = useState(false)
+  const [selectedFiles, setSelectedFiles] = useState<Set<number>>(
+    new Set(Array.from({length: uploadedFiles.length}, (_, i) => i))
+  )
+  const [selectedUrls, setSelectedUrls] = useState<Set<number>>(
+    new Set(Array.from({length: uploadedUrls.length}, (_, i) => i))
+  )
+
+  // When files are added externally, update selected state to include them
+  useEffect(() => {
+    const newSelection = new Set(Array.from({length: uploadedFiles.length}, (_, i) => i))
+    setSelectedFiles(newSelection)
+    onSelectedFilesChange?.(newSelection)
+  }, [uploadedFiles.length])
+
+  // When URLs are added externally, update selected state to include them
+  useEffect(() => {
+    const newSelection = new Set(Array.from({length: uploadedUrls.length}, (_, i) => i))
+    setSelectedUrls(newSelection)
+    onSelectedUrlsChange?.(newSelection)
+  }, [uploadedUrls.length])
 
   const validateAndProcessFiles = (files: FileList | null) => {
     if (!files) return
@@ -70,9 +94,59 @@ export function ChatInterface({
 
     if (validFiles.length > 0) {
       onFilesAdded(validFiles)
+      // Set all files (existing + new) as selected by default
+      const newSelection = new Set(Array.from({length: uploadedFiles.length + validFiles.length}, (_, i) => i))
+      setSelectedFiles(newSelection)
+      onSelectedFilesChange?.(newSelection)
     } else if (fileArray.length > 0) {
       alert("Please upload PDF, TXT, DOC, DOCX, PNG, JPG, or JPEG files only.")
     }
+  }
+
+  const handleToggleFile = (index: number) => {
+    const newSet = new Set(selectedFiles)
+    if (newSet.has(index)) {
+      newSet.delete(index)
+    } else {
+      newSet.add(index)
+    }
+    setSelectedFiles(newSet)
+    onSelectedFilesChange?.(newSet)
+  }
+
+  const handleToggleUrl = (index: number) => {
+    const newSet = new Set(selectedUrls)
+    if (newSet.has(index)) {
+      newSet.delete(index)
+    } else {
+      newSet.add(index)
+    }
+    setSelectedUrls(newSet)
+    onSelectedUrlsChange?.(newSet)
+  }
+
+  const handleSelectAllFiles = () => {
+    const newSet = new Set(Array.from({length: uploadedFiles.length}, (_, i) => i))
+    setSelectedFiles(newSet)
+    onSelectedFilesChange?.(newSet)
+  }
+
+  const handleDeselectAllFiles = () => {
+    const newSet = new Set<number>()
+    setSelectedFiles(newSet)
+    onSelectedFilesChange?.(newSet)
+  }
+
+  const handleSelectAllUrls = () => {
+    const newSet = new Set(Array.from({length: uploadedUrls.length}, (_, i) => i))
+    setSelectedUrls(newSet)
+    onSelectedUrlsChange?.(newSet)
+  }
+
+  const handleDeselectAllUrls = () => {
+    const newSet = new Set<number>()
+    setSelectedUrls(newSet)
+    onSelectedUrlsChange?.(newSet)
   }
 
   const handleChatDragOver = (e: React.DragEvent<HTMLDivElement>) => {
@@ -113,7 +187,7 @@ export function ChatInterface({
                   onClick={onClearChat}
                   variant="outline"
                   size="sm"
-                  className="w-full justify-start gap-2 bg-transparent"
+                  className="w-full justify-start gap-2 bg-transparent cursor-pointer"
                 >
                   <RotateCcw className="h-4 w-4" />
                   New Chat
@@ -134,7 +208,7 @@ export function ChatInterface({
                       }}
                       variant="outline"
                       size="sm"
-                      className={currentSessionIndex === index ? "w-full justify-start gap-2 bg-gray-700! mb-1" : "w-full justify-start gap-2 mb-1"}
+                      className={currentSessionIndex === index ? "w-full justify-start gap-2 bg-gray-700! mb-1 cursor-pointer" : "w-full justify-start gap-2 mb-1 cursor-pointer"}
                     >
                       {session.name}
                     </Button>
@@ -153,7 +227,7 @@ export function ChatInterface({
         {/* Header */}
         <div className="border-b border-border bg-card px-6 py-4 flex items-center justify-between w-full z-50">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" onClick={() => setSidebarOpen(!sidebarOpen)}>
+            <Button variant="ghost" size="sm" onClick={() => setSidebarOpen(!sidebarOpen)} className="cursor-pointer">
               <Menu className="h-5 w-5" />
             </Button>
             <h2 className="text-lg font-semibold text-foreground">Assistant{sessions[currentSessionIndex]?.name ? ": " + sessions[currentSessionIndex]?.name : ""}</h2>
@@ -176,6 +250,14 @@ export function ChatInterface({
                 urls={uploadedUrls}
                 onRemoveFile={onRemoveFile}
                 onRemoveUrl={onRemoveUrl}
+                selectedFiles={selectedFiles}
+                selectedUrls={selectedUrls}
+                onToggleFile={handleToggleFile}
+                onToggleUrl={handleToggleUrl}
+                onSelectAllFiles={handleSelectAllFiles}
+                onDeselectAllFiles={handleDeselectAllFiles}
+                onSelectAllUrls={handleSelectAllUrls}
+                onDeselectAllUrls={handleDeselectAllUrls}
               />
             )}
 
@@ -199,7 +281,16 @@ export function ChatInterface({
         {/* Input area */}
         <div className="border-t">
           <ChatInput
-            onSendMessage={onSendMessage}
+            onSendMessage={(message) => {
+              // Filter to only selected files and URLs for sending
+              const selectedFilesList = uploadedFiles.filter((_, idx) => selectedFiles.has(idx))
+              const selectedUrlsList = uploadedUrls.filter((_, idx) => selectedUrls.has(idx))
+              
+              console.log(`Sending with ${selectedFilesList.length}/${uploadedFiles.length} files and ${selectedUrlsList.length}/${uploadedUrls.length} URLs selected`)
+              
+              // Send message - backend will use only files in fileContents that are from selected sources
+              onSendMessage(message)
+            }}
             onFilesAdded={onFilesAdded}
             onUrlAdded={onUrlAdded}
             isGenerating={isGenerating}

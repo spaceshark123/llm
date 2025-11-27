@@ -127,7 +127,7 @@ export function ChatInput({ onSendMessage, onFilesAdded, onUrlAdded, isGeneratin
           {/* File upload */}
           <Dialog>
             <DialogTrigger asChild>
-              <Button variant="outline" size="icon" title="Upload file (PDF, TXT, DOC, DOCX, PNG, JPG, JPEG)">
+              <Button variant="outline" size="icon" title="Upload file (PDF, TXT, DOC, DOCX, PNG, JPG, JPEG)" className="cursor-pointer">
                 <Paperclip className="h-4 w-4" />
               </Button>
             </DialogTrigger>
@@ -143,7 +143,7 @@ export function ChatInput({ onSendMessage, onFilesAdded, onUrlAdded, isGeneratin
                   multiple
                   accept=".pdf,.txt,.doc,.docx,.png,.jpg,.jpeg"
                   onChange={handleFileSelect}
-                  className="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
+                  className="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 file:cursor-pointer"
                 />
               </div>
             </DialogContent>
@@ -152,7 +152,7 @@ export function ChatInput({ onSendMessage, onFilesAdded, onUrlAdded, isGeneratin
           {/* URL input */}
           <Dialog>
             <DialogTrigger asChild>
-              <Button variant="outline" size="icon" title="Add URL">
+              <Button variant="outline" size="icon" title="Add URL" className="cursor-pointer">
                 <LinkIcon className="h-4 w-4" />
               </Button>
             </DialogTrigger>
@@ -173,7 +173,7 @@ export function ChatInput({ onSendMessage, onFilesAdded, onUrlAdded, isGeneratin
                       }
                     }}
                   />
-                  <Button onClick={handleAddUrl}>Add</Button>
+                  <Button onClick={handleAddUrl} className="cursor-pointer">Add</Button>
                 </div>
               </div>
             </DialogContent>
@@ -203,18 +203,18 @@ export function ChatInput({ onSendMessage, onFilesAdded, onUrlAdded, isGeneratin
           {/* Send/Stop/Answer Now buttons */}
           {isGenerating ? (
             <>
-              <Button onClick={onStopGeneration} disabled={!streamingStarted || !responseReady || controlsLocked} variant="destructive" size="icon" title="Stop generating">
+              <Button onClick={onStopGeneration} disabled={!streamingStarted || !responseReady || controlsLocked} variant="destructive" size="icon" title="Stop generating" className="cursor-pointer">
                 <Square className="h-4 w-4" />
               </Button>
               {responseReady && (
-                <Button onClick={onAnswerNow} disabled={controlsLocked} variant="outline" size="sm" title="Complete answer instantly" className="gap-2">
+                <Button onClick={onAnswerNow} disabled={controlsLocked} variant="outline" size="sm" title="Complete answer instantly" className="gap-2 cursor-pointer">
                   <Zap className="h-4 w-4" />
                   Answer Now
                 </Button>
               )}
             </>
           ) : (
-            <Button onClick={handleSend} disabled={!input.trim() || isProcessingFiles} size="icon" title={isProcessingFiles ? "Please wait for files to process" : "Send message"}>
+            <Button onClick={handleSend} disabled={!input.trim() || isProcessingFiles} size="icon" title={isProcessingFiles ? "Please wait for files to process" : "Send message"} className="cursor-pointer">
               <Send className="h-4 w-4" />
             </Button>
           )}

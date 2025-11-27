@@ -2,6 +2,9 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
 import json
+import io
+import numpy as np
+from PIL import Image
 from llm import chat, get_session_history, clear_session
 from langchain_core.messages import HumanMessage, AIMessage
 from dotenv import load_dotenv
@@ -14,6 +17,30 @@ except ImportError:
 	PDF_AVAILABLE = False
 	print("Warning: pypdf not installed. PDF processing will be limited.")
 
+# Initialize EasyOCR reader globally
+ocr_reader = None
+EASYOCR_AVAILABLE = False
+
+def initialize_easyocr():
+	"""Initialize EasyOCR reader with error handling."""
+	global ocr_reader, EASYOCR_AVAILABLE
+	try:
+		import easyocr
+		ocr_reader = easyocr.Reader(['en'], gpu=False)
+		EASYOCR_AVAILABLE = True
+		print("EasyOCR initialized successfully")
+	except ImportError:
+		EASYOCR_AVAILABLE = False
+		ocr_reader = None
+		print("Warning: easyocr not installed. Image OCR will be limited.")
+	except Exception as e:
+		EASYOCR_AVAILABLE = False
+		ocr_reader = None
+		print(f"Warning: easyocr initialization failed: {e}")
+
+# Initialize on startup
+initialize_easyocr()
+
 load_dotenv()
 PORT = int(os.getenv('BACKEND_PORT', 5050))
 
@@ -24,22 +51,99 @@ app.config['CORS_SUPPORTS_CREDENTIALS'] = True
 
 CORS(app)
 
+def extract_text_from_image(image_file):
+	"""Extract text from image file using EasyOCR."""
+	if not EASYOCR_AVAILABLE or ocr_reader is None:
+		return f"[Image OCR unavailable - easyocr not installed]"
+	
+	try:
+		# Read image file into memory
+		image_data = image_file.read()
+		image_file.seek(0)
+		
+		# Convert bytes to PIL Image
+		image = Image.open(io.BytesIO(image_data))
+		
+		# Convert to RGB if necessary (handles RGBA, grayscale, etc.)
+		if image.mode != 'RGB':
+			image = image.convert('RGB')
+		
+		# Convert to numpy array for easyocr
+		image_array = np.array(image)
+		
+		# Run OCR with confidence threshold
+		ocr_result = ocr_reader.readtext(image_array, detail=1)
+		
+		# Extract text from results (ocr_result is list of tuples: (bbox, text, confidence))
+		if not ocr_result:
+			return f"[Image File: {image_file.filename}]\nNo text detected in image."
+		
+		# Extract text with confidence filtering
+		text_lines = [item[1] for item in ocr_result if item[2] > 0.3]  # confidence > 0.3
+		text = '\n'.join(text_lines)
+		
+		if not text.strip():
+			return f"[Image File: {image_file.filename}]\nNo text detected in image."
+		
+		return text
+	except Exception as e:
+		print(f"Image OCR Error for {image_file.filename}: {str(e)}")
+		return f"[Image OCR Error: {str(e)}]"
+
 def extract_pdf_text(pdf_file):
-	"""Extract text from PDF file using pypdf."""
+	"""Extract text from PDF file using pypdf and EasyOCR fallback."""
 	if not PDF_AVAILABLE:
 		return f"[PDF processing unavailable - pypdf not installed]"
 	
 	try:
-		reader = pypdf.PdfReader(pdf_file)
+		# Save file position to restore later
+		original_pos = pdf_file.stream.tell() if hasattr(pdf_file, 'stream') else 0
+		
+		pdf_reader = pypdf.PdfReader(pdf_file)
 		text = ""
-		for page_num, page in enumerate(reader.pages):
+		
+		for page_num, page in enumerate(pdf_reader.pages):
 			try:
-				text += f"\n--- Page {page_num + 1} ---\n"
-				text += page.extract_text()
+				# Try text extraction first
+				page_text = page.extract_text()
+				
+				if page_text and page_text.strip():
+					text += f"\n--- Page {page_num + 1} ---\n"
+					text += page_text
+				else:
+					# If no text extracted, try EasyOCR fallback on the page
+					if EASYOCR_AVAILABLE and ocr_reader is not None:
+						text += f"\n--- Page {page_num + 1} (OCR) ---\n"
+						try:
+							# Try to render PDF page to image for OCR
+							try:
+								import fitz  # pymupdf
+								pdf_file.seek(0)
+								doc = fitz.open(stream=pdf_file.read(), filetype="pdf")
+								page_image = doc[page_num].get_pixmap(matrix=fitz.Matrix(2, 2))
+								
+								# Convert pixmap to numpy array
+								image_data = page_image.tobytes("ppm")
+								image = Image.open(io.BytesIO(image_data))
+								image_array = np.array(image)
+								
+								# Run OCR on the page image
+								ocr_result = ocr_reader.readtext(image_array, detail=1)
+								ocr_text = '\n'.join([item[1] for item in ocr_result if item[2] > 0.3])
+								text += ocr_text if ocr_text.strip() else "[No text detected on page]\n"
+								doc.close()
+							except ImportError:
+								text += "[pymupdf not installed - cannot OCR scanned PDF pages]\n"
+						except Exception as ocr_error:
+							text += f"[OCR failed for page {page_num + 1}: {str(ocr_error)}]\n"
+					else:
+						text += f"[No text on page {page_num + 1}]\n"
 			except Exception as e:
 				text += f"[Failed to extract page {page_num + 1}: {str(e)}]\n"
-		return text
+		
+		return text if text.strip() else "[PDF file had no extractable text]"
 	except Exception as e:
+		print(f"PDF processing error: {str(e)}")
 		return f"[Failed to process PDF: {str(e)}]"
 
 @app.route('/')
@@ -93,12 +197,38 @@ def chat_endpoint():
 				# Add to file metadata if not already there
 				file_exists = any(f['name'] == pdf_file.filename for f in files)
 				if not file_exists:
+					# Get file size before reading
+					pdf_file.seek(0, os.SEEK_END)
+					file_size = pdf_file.tell()
+					pdf_file.seek(0)
+					
 					files.append({
 						'name': pdf_file.filename,
 						'type': 'application/pdf',
-						'size': len(pdf_file.read())
+						'size': file_size
 					})
-					pdf_file.seek(0)  # Reset file pointer
+		
+		# Process uploaded image files (PNG, JPG, JPEG, GIF)
+		if 'image_files' in request.files:
+			image_files = request.files.getlist('image_files')
+			for image_file in image_files:
+				print(f"Processing uploaded image: {image_file.filename}")
+				image_text = extract_text_from_image(image_file)
+				file_contents[image_file.filename] = image_text
+				
+				# Add to file metadata if not already there
+				file_exists = any(f['name'] == image_file.filename for f in files)
+				if not file_exists:
+					# Get file size before reading
+					image_file.seek(0, os.SEEK_END)
+					file_size = image_file.tell()
+					image_file.seek(0)
+					
+					files.append({
+						'name': image_file.filename,
+						'type': image_file.content_type or 'image/unknown',
+						'size': file_size
+					})
 
 	print("Message:", message)
 	print("Files:", [f.get('name') if isinstance(f, dict) else f for f in files])

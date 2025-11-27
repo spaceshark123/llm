@@ -34,6 +34,8 @@ function App() {
   const abortControllerRef = useRef<AbortController | null>(null)
   const isCanceledRef = useRef(false)
   const controlsUnlockTimerRef = useRef<number | null>(null)
+  const selectedFilesRef = useRef<Set<number>>(new Set())
+  const selectedUrlsRef = useRef<Set<number>>(new Set())
 
   const fetchHistory = async () => {
     if (currentSessionIndex === -1) {
@@ -172,11 +174,19 @@ function App() {
     }
 
     // Build file metadata and contents from OCR results
+    // Only include selected files and URLs
     const fileMetadata: Array<{ name: string; type: string; size: number }> = []
     const fileContents: { [key: string]: string } = {}
     const pdfFiles: File[] = []
+    const imageFiles: File[] = []
     
-    uploadedFiles.forEach((file) => {
+    uploadedFiles.forEach((file, fileIndex) => {
+      // Skip files that are not selected
+      if (!selectedFilesRef.current.has(fileIndex)) {
+        console.log(`Skipping deselected file: ${file.name}`)
+        return
+      }
+      
       const fileId = `${file.name}-${file.size}-${file.lastModified}`
       const ocrContent = fileOcrContent.get(fileId)
       if (ocrContent) {
@@ -191,25 +201,44 @@ function App() {
         if (file.type === 'application/pdf') {
           pdfFiles.push(file)
         }
+        // Collect image files for multipart upload with backend EasyOCR
+        else if (['image/png', 'image/jpeg', 'image/gif', 'image/bmp'].includes(file.type)) {
+          imageFiles.push(file)
+        }
       }
     })
-    console.log("Sending message with files:", fileMetadata)
+    
+    // Filter URLs to only include selected ones
+    const selectedUrls = uploadedUrls.filter((_, urlIndex) => {
+      const isSelected = selectedUrlsRef.current.has(urlIndex)
+      if (!isSelected) {
+        console.log(`Skipping deselected URL: ${uploadedUrls[urlIndex]}`)
+      }
+      return isSelected
+    })
+    
+    console.log(`Sending message with ${fileMetadata.length} files and ${selectedUrls.length} URLs`)
     console.log("File contents details:", Object.keys(fileContents))
 
     let response
     let data
     try {
-      // If there are PDF files, use FormData for file upload
-      if (pdfFiles.length > 0) {
+      // If there are PDF or image files, use FormData for file upload
+      if (pdfFiles.length > 0 || imageFiles.length > 0) {
         const formData = new FormData()
         formData.append('message', content)
         formData.append('fileContents', JSON.stringify(fileContents))
         formData.append('fileMetadata', JSON.stringify(fileMetadata))
-        formData.append('urls', JSON.stringify(uploadedUrls))
+        formData.append('urls', JSON.stringify(selectedUrls))
         
         // Append each PDF file
         pdfFiles.forEach((file) => {
           formData.append('pdf_files', file, file.name)
+        })
+        
+        // Append each image file for backend EasyOCR processing
+        imageFiles.forEach((file) => {
+          formData.append('image_files', file, file.name)
         })
         
         response = await fetch(`${API_URL}/chat`, {
@@ -221,7 +250,7 @@ function App() {
           signal: controller.signal,
         })
       } else {
-        // Use JSON for non-PDF files
+        // Use JSON for non-PDF/image files
         response = await fetch(`${API_URL}/chat`, {
           method: 'POST',
           headers: {
@@ -232,7 +261,7 @@ function App() {
             message: content,
             files: fileMetadata,
             fileContents: fileContents,
-            urls: uploadedUrls,
+            urls: selectedUrls,
           }),
           signal: controller.signal,
         })
@@ -322,7 +351,8 @@ function App() {
 
   const extractTextFromFile = async (file: File): Promise<string> => {
     const fileType = file.name.split(".").pop()?.toLowerCase()
-    console.log(`Extracting text from ${file.name} (type: ${fileType})`)
+    const mimeType = file.type.toLowerCase()
+    console.log(`Extracting text from ${file.name} (type: ${fileType}, mime: ${mimeType})`)
     
     try {
       if (fileType === "txt") {
@@ -337,25 +367,14 @@ function App() {
           reader.onerror = reject
           reader.readAsText(file)
         })
-      } else if (["png", "jpg", "jpeg", "gif", "bmp"].includes(fileType || "")) {
-        // For images, use tesseract.js for OCR
-        try {
-          console.log(`Starting Tesseract.js OCR for image: ${file.name}`)
-          const Tesseract = (await import('tesseract.js')).default
-          const result = await Tesseract.recognize(file, 'eng')
-          const text = result.data.text || ""
-          console.log(`Image OCR completed: ${text.length} characters extracted`)
-          return text || `[Image File: ${file.name}]\nNo text detected in image.`
-        } catch (error) {
-          console.error("Tesseract OCR error:", error)
-          return `[Image File: ${file.name}]\nFailed to extract text from image: ${(error as Error).message}`
-        }
-      } else if (fileType === "pdf") {
+      } else if (["png", "jpg", "jpeg", "gif", "bmp"].includes(fileType || "") || mimeType.startsWith("image/")) {
+        // For images, return marker - backend will handle with EasyOCR
+        console.log(`Preparing image for backend EasyOCR processing: ${file.name}`)
+        return `[Image File: ${file.name}]\nFile will be processed by the server using EasyOCR.`
+      } else if (fileType === "pdf" || mimeType === "application/pdf") {
         // For PDF files, return a marker indicating backend should process it
         try {
           console.log(`Preparing PDF for backend processing: ${file.name}`)
-          // Return a placeholder that indicates the backend should handle this
-          // The file itself will be sent to the backend
           return `[PDF File: ${file.name}]\nFile will be processed by the server.`
         } catch (error) {
           console.error("PDF preparation error:", error)
@@ -533,6 +552,12 @@ function App() {
       currentSessionIndex={currentSessionIndex}
       setSessions={setSessions}
       setCurrentSessionIndex={setCurrentSessionIndex}
+      onSelectedFilesChange={(selectedFiles) => {
+        selectedFilesRef.current = selectedFiles
+      }}
+      onSelectedUrlsChange={(selectedUrls) => {
+        selectedUrlsRef.current = selectedUrls
+      }}
     />
   )
 }
