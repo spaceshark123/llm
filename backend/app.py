@@ -260,7 +260,12 @@ def home():
 @app.route('/api/chat', methods=['POST'])
 def chat_endpoint():
 	session_id = request.headers.get('Session-ID')
-	
+
+	# make session folder if not exists
+	session_folder = os.path.join(DATA_PATH, session_id)
+	if not os.path.exists(session_folder):
+		os.makedirs(session_folder)
+
 	# Handle both JSON and FormData requests
 	message = None
 	files = []
@@ -357,6 +362,14 @@ def source_endpoint():
 		extensions = [file.rsplit('.', 1)[-1].lower() for file in file_names]
 		files = [{'name': name, 'extension': ext} for name, ext in zip(file_names, extensions)]
 		return jsonify({'files': files}), 200
+
+# get all sessions endpoint
+@app.route('/api/sessions', methods=['GET'])
+def sessions_endpoint():
+	sessions = []
+	if os.path.exists(DATA_PATH):
+		sessions = [name for name in os.listdir(DATA_PATH) if os.path.isdir(os.path.join(DATA_PATH, name))]
+	return jsonify({'sessions': sessions}), 200
 
 # get/clear session history endpoint
 @app.route('/api/history', methods=['GET', 'DELETE'])

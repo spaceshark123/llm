@@ -38,41 +38,40 @@ function App() {
   const selectedUrlsRef = useRef<Set<number>>(new Set())
   const messagesMetadataRef = useRef<Map<string, { fileMetadata?: any; urls?: string[] }>>(new Map())
 
-  const fetchHistory = async () => {
-    if (currentSessionIndex === -1) {
-      // reset to initial message
-      setMessages([
-        {
-          id: "1",
-          role: "assistant",
-          content:
-            initialMessage,
-          sources: [],
-          timestamp: new Date(),
-        },
-      ])
-      return
-    }
-    const sessionId = sessions[currentSessionIndex]?.id
-    if (!sessionId) return
-
+  const fetchSessions = async () => {
     try {
-      const response = await fetch(`${API_URL}/history`, {
+      const response = await fetch(`${API_URL}/sessions`, {
         method: 'GET',
-        headers: {
-          'Session-ID': sessionId,
-        },
       })
       const data = await response.json()
-      if (response.ok) {
-        setMessages(data.history)
-      } else {
-        console.error("Failed to fetch history:", data)
-      }
+      console.log("Fetched sessions:", data.sessions)
+      
+      // get session names as first 20 chars of first message in history
+      const namesPromises = data.sessions.map(async (session: string) => {
+        const historyResponse = await fetch(`${API_URL}/history`, {
+          method: 'GET',
+          headers: {
+            'Session-ID': session,
+          },
+        })
+        const historyData = await historyResponse.json()
+        console.log("Fetched history for session:", session, historyData)
+        let name = "New Session"
+        if (historyData.history && historyData.history.length > 0) {
+          name = historyData.history[0].content.slice(0, 20)
+        }
+        return { id: session, name: name } as Session
+      })
+      const sessionsWithNames = await Promise.all(namesPromises)
+      setSessions(sessionsWithNames)
     } catch (error) {
-      console.error("Error fetching history:", error)
+      console.error("Error fetching sessions:", error)
     }
   }
+
+  useEffect(() => {
+    fetchSessions()
+  }, []) // fetch sessions on mount
 
   useEffect(() => {
     if (isGenerating) return; // do not change messages while generating
