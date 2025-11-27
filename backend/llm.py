@@ -83,11 +83,22 @@ def chat(input_str: str, session_id: str = "default", file_contents: dict = None
     # Combine file context with user input
     full_input = file_context + input_str if file_context else input_str
     
-    response = chat_with_history.invoke(
-        {"input": full_input},
-        config={"configurable": {"session_id": session_id}}
-    )
-    
+    response = None
+    try:
+        response = chat_with_history.invoke(
+            {"input": full_input},
+            config={"configurable": {"session_id": session_id}}
+        )
+    except Exception as e:
+        print("Error during chat invocation:", e)
+        if("413" in str(e)):
+            # prompt too large
+            return "Error: The input is too large for the model to process. Please reduce the size of your input."
+        if("429" in str(e)):
+            return "Error: Rate limit exceeded. Please try again later."
+        return "Error: An unexpected error occurred while processing your request."
+        
+        
     # Store metadata for the user message that was just added
     user_metadata = {}
     if file_metadata:
