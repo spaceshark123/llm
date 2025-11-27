@@ -11,49 +11,73 @@ interface ChatMessagesProps {
   onStreamingStart?: (messageId: string) => void
 }
 
+// Remove FILE CONTEXT sections from user messages for display
+function cleanUserMessage(content: string): string {
+  return content.replace(/\[FILE CONTEXT\]([\s\S]*?)\[END FILE CONTEXT\]\n*/g, '').trim()
+}
+
 export function ChatMessages({ messages, onStreamingComplete, onStreamingStart }: ChatMessagesProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const scrollTimeoutRef = useRef<number | null>(null)
+  const userScrolledRef = useRef(false)
+  const isStreamingRef = useRef(false)
+  const messageIdsRef = useRef<string[]>([])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }
 
-  // Scroll when messages array changes (new message added)
+  // Track if user manually scrolled
   useEffect(() => {
-    scrollToBottom()
+    const container = scrollRef.current
+    if (!container) return
+
+    const handleScroll = () => {
+      // If scrolled away from bottom, mark that user scrolled manually
+      const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50
+      userScrolledRef.current = !isAtBottom
+    }
+
+    container.addEventListener('scroll', handleScroll)
+    return () => container.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  // Detect new messages by comparing IDs
+  useEffect(() => {
+    const currentIds = messages.map(m => m.id)
+    const hasNewMessage = currentIds.length > messageIdsRef.current.length
+    
+    if (hasNewMessage) {
+      // New message was added, reset scroll flag and scroll to it
+      userScrolledRef.current = false
+      scrollToBottom()
+    }
+    
+    messageIdsRef.current = currentIds
   }, [messages.length])
 
-  // Debounced scroll during streaming to avoid excessive scrolling
+  // Continuously scroll during streaming (unless user scrolled)
   useEffect(() => {
-    const isAnyStreaming = messages.some(msg => msg.isStreaming || msg.truncatedContent === "__COMPLETE__")
+    const isAnyStreaming = messages.some(msg => msg.isStreaming)
+    isStreamingRef.current = isAnyStreaming
     
     if (!isAnyStreaming) {
-      // Not streaming - scroll immediately
-      scrollToBottom()
-      if (scrollTimeoutRef.current !== null) {
-        clearTimeout(scrollTimeoutRef.current)
-        scrollTimeoutRef.current = null
-      }
+      // Not streaming, stop the scroll interval
       return
     }
-    
-    // During streaming - debounce scroll to every 100ms to avoid cascading re-renders
-    if (scrollTimeoutRef.current === null) {
-      scrollTimeoutRef.current = window.setTimeout(() => {
+
+    // Reset user scroll flag when streaming starts (new response coming)
+    userScrolledRef.current = false
+
+    // During streaming, scroll every 100ms
+    const interval = setInterval(() => {
+      if (!userScrolledRef.current && isStreamingRef.current) {
         scrollToBottom()
-        scrollTimeoutRef.current = null
-      }, 100)
-    }
-    
-    return () => {
-      if (scrollTimeoutRef.current !== null) {
-        clearTimeout(scrollTimeoutRef.current)
-        scrollTimeoutRef.current = null
       }
-    }
-  }, [messages])
+    }, 100)
+
+    return () => clearInterval(interval)
+  }, [messages.length])
 
   return (
     <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-4 max-w-4xl mx-auto w-full">
@@ -84,7 +108,7 @@ export function ChatMessages({ messages, onStreamingComplete, onStreamingStart }
               </span>
             </div>
             <StreamingText 
-              content={message.content} 
+              content={message.role === "user" ? cleanUserMessage(message.content) : message.content} 
               isStreaming={message.isStreaming}
               speed={0.5}
               truncatedContent={message.truncatedContent}
@@ -105,6 +129,41 @@ export function ChatMessages({ messages, onStreamingComplete, onStreamingStart }
                     >
                       📎 {source}
                     </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* File metadata for user messages */}
+            {message.role === "user" && message.fileMetadata && message.fileMetadata.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-border">
+                <p className="text-xs font-semibold text-muted-foreground mb-2">Files:</p>
+                <div className="space-y-1">
+                  {message.fileMetadata.map((file, idx) => (
+                    <div
+                      key={idx}
+                      className="inline-flex items-center gap-2 px-2 py-1 bg-muted rounded text-xs text-muted-foreground"
+                    >
+                      <span>📄 {file.name}</span>
+                      <span className="text-muted-foreground/70">({(file.size / 1024).toFixed(1)} KB)</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* URLs for user messages */}
+            {message.role === "user" && message.urls && message.urls.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-border">
+                <p className="text-xs font-semibold text-muted-foreground mb-2">URLs:</p>
+                <div className="space-y-1">
+                  {message.urls.map((url, idx) => (
+                    <div
+                      key={idx}
+                      className="inline-flex items-center gap-2 px-2 py-1 bg-muted rounded text-xs text-muted-foreground"
+                    >
+                      <span>🔗 {url}</span>
+                    </div>
                   ))}
                 </div>
               </div>

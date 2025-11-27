@@ -52,7 +52,7 @@ chat_with_history = RunnableWithMessageHistory(
     history_messages_key="chat_history",
 )
 
-def chat(input_str: str, session_id: str = "default", file_contents: dict = None, file_metadata: list = None) -> str:
+def chat(input_str: str, session_id: str = "default", file_contents: dict = None, file_metadata: list = None, urls: list = None) -> str:
     """Send a message and get a response with conversation history.
     
     Args:
@@ -60,7 +60,12 @@ def chat(input_str: str, session_id: str = "default", file_contents: dict = None
         session_id: The session ID for conversation history
         file_contents: Dictionary mapping file names to their extracted text content
         file_metadata: List of file metadata objects with name, type, size
+        urls: List of URLs included with the message
     """
+    # Get session history and current message count
+    history = get_session_history(session_id)
+    user_message_index = len(history.messages)
+    
     # Prepare file context if files are provided
     file_context = ""
     if file_metadata and file_contents:
@@ -82,6 +87,26 @@ def chat(input_str: str, session_id: str = "default", file_contents: dict = None
         {"input": full_input},
         config={"configurable": {"session_id": session_id}}
     )
+    
+    # Store metadata for the user message that was just added
+    user_metadata = {}
+    if file_metadata:
+        user_metadata['fileMetadata'] = file_metadata
+    if urls:
+        user_metadata['urls'] = urls
+    if user_metadata:
+        history.add_message_metadata(user_message_index, user_metadata)
+    
+    # Store metadata for the AI response message
+    ai_message_index = len(history.messages) - 1  # AI message was just added
+    ai_metadata = {}
+    if file_metadata or urls:
+        ai_metadata['sources'] = [f['name'] for f in file_metadata] if file_metadata else []
+        if urls:
+            ai_metadata['sources'].extend(urls)
+    if ai_metadata and ai_metadata['sources']:
+        history.add_message_metadata(ai_message_index, ai_metadata)
+    
     return response
 
 def clear_session(session_id: str):

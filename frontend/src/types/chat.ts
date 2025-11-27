@@ -6,4 +6,6 @@ export interface ChatMessage {
   timestamp: Date
   isStreaming?: boolean
   truncatedContent?: string
+  fileMetadata?: Array<{ name: string; type: string; size: number }>
+  urls?: string[]
 }

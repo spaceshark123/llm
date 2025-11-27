@@ -36,6 +36,7 @@ function App() {
   const controlsUnlockTimerRef = useRef<number | null>(null)
   const selectedFilesRef = useRef<Set<number>>(new Set())
   const selectedUrlsRef = useRef<Set<number>>(new Set())
+  const messagesMetadataRef = useRef<Map<string, { fileMetadata?: any; urls?: string[] }>>(new Map())
 
   const fetchHistory = async () => {
     if (currentSessionIndex === -1) {
@@ -89,7 +90,15 @@ function App() {
           .then((data) => {
             console.log("Fetched history for session:", currentSessionIndex, data)
             if (data.history) {
-              setMessages(data.history)
+              // Restore fileMetadata and urls from ref for user messages
+              const messagesWithMetadata = data.history.map((msg: ChatMessage) => {
+                const metadata = messagesMetadataRef.current.get(msg.id)
+                if (metadata) {
+                  return { ...msg, ...metadata }
+                }
+                return msg
+              })
+              setMessages(messagesWithMetadata)
             }
           })
           .catch((error) => {
@@ -121,56 +130,6 @@ function App() {
     if (processingFiles.size > 0) {
       alert("Please wait for all files to finish processing before sending a message.")
       return
-    }
-
-    // Add user message
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      role: "user",
-      content,
-      sources: [],
-      timestamp: new Date(),
-    }
-    flushSync(() => {
-      setMessages((prev) => [...prev, userMessage])
-    })
-    // Give React a chance to paint the update NOW
-    await new Promise(resolve => setTimeout(resolve, 0));
-    setIsGenerating(true)
-    setResponseReady(false)
-    setStreamingStarted(false)
-    isCanceledRef.current = false
-    // Reset any prior control lock
-    setControlsLocked(false)
-    if (controlsUnlockTimerRef.current !== null) {
-      clearTimeout(controlsUnlockTimerRef.current)
-      controlsUnlockTimerRef.current = null
-    }
-
-    // Create a new generation id and abort controller for this request
-    const generationId = Date.now()
-    activeGenerationIdRef.current = generationId
-    const controller = new AbortController()
-    abortControllerRef.current = controller
-
-    // Backend call with cancellation support
-    // check if this is the first message to start a new session
-    let sessionId = "";
-    if (currentSessionIndex === -1) {
-      // create a new session id
-      sessionId = `session-${Date.now()}`
-      // name after first message
-      const newSessionName = content.slice(0, 20) + (content.length > 20 ? "..." : "")
-      const newSession: Session = { id: sessionId, name: newSessionName }
-      setCurrentSessionIndex(sessions.length)
-      setSessions((prev) => [...prev, newSession])
-      // clear initial message
-      setMessages([userMessage])
-      console.log("Created new session:", sessionId, newSessionName)
-      console.log("Sessions now:", sessions)
-      console.log("Current session index now:", sessions.length)
-    } else {
-      sessionId = sessions[currentSessionIndex]?.id
     }
 
     // Build file metadata and contents from OCR results
@@ -216,7 +175,65 @@ function App() {
       }
       return isSelected
     })
-    
+
+    // Add user message with file/URL metadata
+    const userMessage: ChatMessage = {
+      id: Date.now().toString(),
+      role: "user",
+      content,
+      sources: [],
+      timestamp: new Date(),
+      fileMetadata: fileMetadata.length > 0 ? fileMetadata : undefined,
+      urls: selectedUrls.length > 0 ? selectedUrls : undefined,
+    }
+    // Store metadata in ref to preserve when history is refetched
+    messagesMetadataRef.current.set(userMessage.id, {
+      fileMetadata: userMessage.fileMetadata,
+      urls: userMessage.urls,
+    })
+    flushSync(() => {
+      setMessages((prev) => [...prev, userMessage])
+    })
+    // Give React a chance to paint the update NOW
+    await new Promise(resolve => setTimeout(resolve, 0));
+    setIsGenerating(true)
+    setResponseReady(false)
+    setStreamingStarted(false)
+    isCanceledRef.current = false
+    // Reset any prior control lock
+    setControlsLocked(false)
+    if (controlsUnlockTimerRef.current !== null) {
+      clearTimeout(controlsUnlockTimerRef.current)
+      controlsUnlockTimerRef.current = null
+    }
+
+    // Create a new generation id and abort controller for this request
+    const generationId = Date.now()
+    activeGenerationIdRef.current = generationId
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
+    // Backend call with cancellation support
+    // check if this is the first message to start a new session
+    let sessionId = "";
+    if (currentSessionIndex === -1) {
+      // create a new session id
+      sessionId = `session-${Date.now()}`
+      // name after first message
+      const newSessionName = content.slice(0, 20) + (content.length > 20 ? "..." : "")
+      const newSession: Session = { id: sessionId, name: newSessionName }
+      setCurrentSessionIndex(sessions.length)
+      setSessions((prev) => [...prev, newSession])
+      // clear initial message
+      setMessages([userMessage])
+      console.log("Created new session:", sessionId, newSessionName)
+      console.log("Sessions now:", sessions)
+      console.log("Current session index now:", sessions.length)
+    } else {
+      sessionId = sessions[currentSessionIndex]?.id
+    }
+
+    // Use the fileMetadata, fileContents, pdfFiles, imageFiles, selectedUrls already built above
     console.log(`Sending message with ${fileMetadata.length} files and ${selectedUrls.length} URLs`)
     console.log("File contents details:", Object.keys(fileContents))
 

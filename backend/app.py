@@ -243,7 +243,7 @@ def chat_endpoint():
 	print("chat request for session:", session_id)
 
 	# Pass files and file_contents to chat function
-	reply = chat(message, session_id=session_id, file_contents=file_contents, file_metadata=files)
+	reply = chat(message, session_id=session_id, file_contents=file_contents, file_metadata=files, urls=urls)
 	return jsonify({'reply': reply})
 
 # get/clear session history endpoint
@@ -271,17 +271,20 @@ def history_endpoint():
 }
 
         '''
-        history = get_session_history(session_id).get_messages_with_timestamps()
+        session_history = get_session_history(session_id)
+        history = session_history.get_messages_with_timestamps()
         print("Fetched history for session:", session_id, history)
         history_serialized = [
             {
                 'id': str(index),
                 'role': 'assistant' if isinstance(msg, AIMessage) else 'user',
                 'content': msg.content,
-                'sources': [],
+                'sources': session_history.get_message_metadata(index).get('sources', []),
                 'timestamp': timestamp.isoformat(),
                 'isStreaming': False,
                 'truncatedContent': msg.content,
+                'fileMetadata': session_history.get_message_metadata(index).get('fileMetadata'),
+                'urls': session_history.get_message_metadata(index).get('urls'),
             }
             for (index, (msg, timestamp)) in enumerate(history)
         ]
