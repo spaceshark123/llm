@@ -32,6 +32,7 @@ packaging==25.0
 pip==24.0
 pydantic==2.12.4
 pydantic_core==2.41.5
+pypdf==5.2.0
 python-dotenv==1.2.1
 PyYAML==6.0.3
 requests==2.32.5

@@ -5,7 +5,7 @@ import type { Session } from "@/types/session"
 import { flushSync } from "react-dom"
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5050/api"
-const initialMessage: string = "Hello! I'm your LLM Assistant. You can upload files (PDF, TXT, DOCX) or provide website URLs, then ask me questions. I'll help you find answers based on your provided sources."
+const initialMessage: string = "Hello! I'm your LLM Assistant. You can upload files (PDF, TXT, DOCX, PNG, JPG, JPEG) or provide website URLs, then ask me questions. I'll help you find answers based on your provided sources."
 
 function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -27,6 +27,8 @@ function App() {
   const [controlsLocked, setControlsLocked] = useState(false)
   const [sessions, setSessions] = useState<Session[]>([])
   const [currentSessionIndex, setCurrentSessionIndex] = useState(-1)
+  const [processingFiles, setProcessingFiles] = useState<Set<string>>(new Set())
+  const [fileOcrContent, setFileOcrContent] = useState<Map<string, string>>(new Map())
   const currentMessageIdRef = useRef<string | null>(null)
   const activeGenerationIdRef = useRef<number | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -106,13 +108,19 @@ function App() {
       ])
     }
     console.log("updated messages for session index:", currentSessionIndex)
-  }, [currentSessionIndex])
+  }, [currentSessionIndex, isGenerating, sessions])
 
   useEffect(() => {
     console.log("Sessions updated:", sessions)
   }, [sessions])
 
   const handleSendMessage = async (content: string) => {
+    // Prevent sending message if files are still being processed
+    if (processingFiles.size > 0) {
+      alert("Please wait for all files to finish processing before sending a message.")
+      return
+    }
+
     // Add user message
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -163,22 +171,73 @@ function App() {
       sessionId = sessions[currentSessionIndex]?.id
     }
 
+    // Build file metadata and contents from OCR results
+    const fileMetadata: Array<{ name: string; type: string; size: number }> = []
+    const fileContents: { [key: string]: string } = {}
+    const pdfFiles: File[] = []
+    
+    uploadedFiles.forEach((file) => {
+      const fileId = `${file.name}-${file.size}-${file.lastModified}`
+      const ocrContent = fileOcrContent.get(fileId)
+      if (ocrContent) {
+        fileMetadata.push({
+          name: file.name,
+          type: file.type,
+          size: file.size,
+        })
+        fileContents[file.name] = ocrContent
+        
+        // Collect PDF files for multipart upload
+        if (file.type === 'application/pdf') {
+          pdfFiles.push(file)
+        }
+      }
+    })
+    console.log("Sending message with files:", fileMetadata)
+    console.log("File contents details:", Object.keys(fileContents))
+
     let response
     let data
     try {
-      response = await fetch(`${API_URL}/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Session-ID': sessionId,
-        },
-        body: JSON.stringify({
-          message: content,
-          files: uploadedFiles,
-          urls: uploadedUrls,
-        }),
-        signal: controller.signal,
-      });
+      // If there are PDF files, use FormData for file upload
+      if (pdfFiles.length > 0) {
+        const formData = new FormData()
+        formData.append('message', content)
+        formData.append('fileContents', JSON.stringify(fileContents))
+        formData.append('fileMetadata', JSON.stringify(fileMetadata))
+        formData.append('urls', JSON.stringify(uploadedUrls))
+        
+        // Append each PDF file
+        pdfFiles.forEach((file) => {
+          formData.append('pdf_files', file, file.name)
+        })
+        
+        response = await fetch(`${API_URL}/chat`, {
+          method: 'POST',
+          headers: {
+            'Session-ID': sessionId,
+          },
+          body: formData,
+          signal: controller.signal,
+        })
+      } else {
+        // Use JSON for non-PDF files
+        response = await fetch(`${API_URL}/chat`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Session-ID': sessionId,
+          },
+          body: JSON.stringify({
+            message: content,
+            files: fileMetadata,
+            fileContents: fileContents,
+            urls: uploadedUrls,
+          }),
+          signal: controller.signal,
+        })
+      }
+      
       data = await response.json();
       console.log("Backend response:", data);
     } catch (error) {
@@ -232,8 +291,123 @@ function App() {
     }, 1000)
   }
 
-  const handleFilesAdded = (files: File[]) => {
+  const handleFilesAdded = async (files: File[]) => {
+    // Add files to uploaded list
     setUploadedFiles((prev) => [...prev, ...files])
+    console.log("Processing files:", files.map(f => f.name))
+    
+    // Process each file with OCR
+    for (const file of files) {
+      const fileId = `${file.name}-${file.size}-${file.lastModified}`
+      setProcessingFiles((prev) => new Set([...prev, fileId]))
+      console.log(`Starting OCR processing for: ${file.name}`)
+      
+      try {
+        const text = await extractTextFromFile(file)
+        console.log(`OCR completed for ${file.name}, extracted ${text.length} characters`)
+        setFileOcrContent((prev) => new Map([...prev, [fileId, text]]))
+      } catch (error) {
+        console.error(`Failed to process file ${file.name}:`, error)
+        // Still mark as processed even if failed, but with empty content
+        setFileOcrContent((prev) => new Map([...prev, [fileId, ""]]))
+      } finally {
+        setProcessingFiles((prev) => {
+          const newSet = new Set(prev)
+          newSet.delete(fileId)
+          return newSet
+        })
+      }
+    }
+  }
+
+  const extractTextFromFile = async (file: File): Promise<string> => {
+    const fileType = file.name.split(".").pop()?.toLowerCase()
+    console.log(`Extracting text from ${file.name} (type: ${fileType})`)
+    
+    try {
+      if (fileType === "txt") {
+        // For text files, read the content directly
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = (e) => {
+            const text = e.target?.result as string
+            console.log(`Text file read: ${text.length} characters`)
+            resolve(text)
+          }
+          reader.onerror = reject
+          reader.readAsText(file)
+        })
+      } else if (["png", "jpg", "jpeg", "gif", "bmp"].includes(fileType || "")) {
+        // For images, use tesseract.js for OCR
+        try {
+          console.log(`Starting Tesseract.js OCR for image: ${file.name}`)
+          const Tesseract = (await import('tesseract.js')).default
+          const result = await Tesseract.recognize(file, 'eng')
+          const text = result.data.text || ""
+          console.log(`Image OCR completed: ${text.length} characters extracted`)
+          return text || `[Image File: ${file.name}]\nNo text detected in image.`
+        } catch (error) {
+          console.error("Tesseract OCR error:", error)
+          return `[Image File: ${file.name}]\nFailed to extract text from image: ${(error as Error).message}`
+        }
+      } else if (fileType === "pdf") {
+        // For PDF files, return a marker indicating backend should process it
+        try {
+          console.log(`Preparing PDF for backend processing: ${file.name}`)
+          // Return a placeholder that indicates the backend should handle this
+          // The file itself will be sent to the backend
+          return `[PDF File: ${file.name}]\nFile will be processed by the server.`
+        } catch (error) {
+          console.error("PDF preparation error:", error)
+          return `[PDF File: ${file.name}]\nPDF processing error: ${(error as Error).message}`
+        }
+      } else if (fileType === "docx") {
+        // For DOCX files, use mammoth
+        try {
+          console.log(`Starting DOCX text extraction for: ${file.name}`)
+          const mammoth = await import('mammoth')
+          
+          const arrayBuffer = await file.arrayBuffer()
+          const result = await mammoth.default.extractRawText({ arrayBuffer })
+          
+          console.log(`DOCX extraction completed: ${result.value.length} characters extracted`)
+          return result.value || `[DOCX File: ${file.name}]\nNo text detected in document.`
+        } catch (error) {
+          console.error("DOCX extraction error:", error)
+          return `[DOCX File: ${file.name}]\nFailed to extract text from DOCX: ${(error as Error).message}`
+        }
+      } else if (fileType === "doc") {
+        // For DOC files, try multiple approaches
+        try {
+          console.log(`Starting DOC text extraction for: ${file.name}`)
+          const mammoth = await import('mammoth')
+          const arrayBuffer = await file.arrayBuffer()
+          
+          // Try to extract as if it were a docx
+          try {
+            const result = await mammoth.default.extractRawText({ arrayBuffer })
+            if (result.value && result.value.trim().length > 0) {
+              console.log(`DOC extraction completed: ${result.value.length} characters extracted`)
+              return result.value
+            }
+          } catch (mammothError) {
+            console.warn("Mammoth extraction failed for DOC:", mammothError)
+          }
+          
+          // If mammoth fails, return a helpful message
+          console.log(`DOC format: Unable to extract - legacy format`)
+          return `[DOC File: ${file.name}]\nLegacy DOC format detected. For best results, please convert this file to DOCX format. The server will attempt to process it, but text extraction may be incomplete.`
+        } catch (error) {
+          console.error("DOC extraction error:", error)
+          return `[DOC File: ${file.name}]\nFailed to process legacy DOC file: ${(error as Error).message}`
+        }
+      } else {
+        return `[File: ${file.name}]\nFile type not fully supported for client-side processing.`
+      }
+    } catch (error) {
+      console.error("Error extracting text from file:", error)
+      return `[File: ${file.name}]\nError processing file: ${(error as Error).message}`
+    }
   }
 
   const handleUrlAdded = (url: string) => {

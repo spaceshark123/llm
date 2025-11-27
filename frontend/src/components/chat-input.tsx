@@ -16,9 +16,10 @@ interface ChatInputProps {
   onAnswerNow?: () => void
   streamingStarted?: boolean
   controlsLocked?: boolean
+  isProcessingFiles?: boolean
 }
 
-export function ChatInput({ onSendMessage, onFilesAdded, onUrlAdded, isGenerating = false, responseReady = false, onStopGeneration, onAnswerNow, streamingStarted = false, controlsLocked = false }: ChatInputProps) {
+export function ChatInput({ onSendMessage, onFilesAdded, onUrlAdded, isGenerating = false, responseReady = false, onStopGeneration, onAnswerNow, streamingStarted = false, controlsLocked = false, isProcessingFiles = false }: ChatInputProps) {
   const [input, setInput] = useState("")
   const [urlInput, setUrlInput] = useState("")
   const [isDragOverInput, setIsDragOverInput] = useState(false)
@@ -90,13 +91,13 @@ export function ChatInput({ onSendMessage, onFilesAdded, onUrlAdded, isGeneratin
     const fileArray = Array.from(files)
     const validFiles = fileArray.filter((file) => {
       const ext = file.name.split(".").pop()?.toLowerCase()
-      return ["pdf", "txt", "doc", "docx"].includes(ext || "")
+      return ["pdf", "txt", "doc", "docx", "png", "jpg", "jpeg"].includes(ext || "")
     })
 
     if (validFiles.length > 0) {
       onFilesAdded(validFiles)
     } else if (fileArray.length > 0) {
-      alert("Please upload PDF, TXT, DOC, or DOCX files only.")
+      alert("Please upload PDF, TXT, DOC, DOCX, PNG, JPG, or JPEG files only.")
     }
   }
 
@@ -126,7 +127,7 @@ export function ChatInput({ onSendMessage, onFilesAdded, onUrlAdded, isGeneratin
           {/* File upload */}
           <Dialog>
             <DialogTrigger asChild>
-              <Button variant="outline" size="icon" title="Upload file (PDF, TXT, DOC, DOCX)">
+              <Button variant="outline" size="icon" title="Upload file (PDF, TXT, DOC, DOCX, PNG, JPG, JPEG)">
                 <Paperclip className="h-4 w-4" />
               </Button>
             </DialogTrigger>
@@ -135,12 +136,12 @@ export function ChatInput({ onSendMessage, onFilesAdded, onUrlAdded, isGeneratin
                 <DialogTitle>Upload Files</DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">Supported formats: PDF, TXT, DOC, DOCX</p>
+                <p className="text-sm text-muted-foreground">Supported formats: PDF, TXT, DOC, DOCX, PNG, JPG, JPEG</p>
                 <input
                   ref={fileInputRef}
                   type="file"
                   multiple
-                  accept=".pdf,.txt,.doc,.docx"
+                  accept=".pdf,.txt,.doc,.docx,.png,.jpg,.jpeg"
                   onChange={handleFileSelect}
                   className="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
                 />
@@ -193,7 +194,7 @@ export function ChatInput({ onSendMessage, onFilesAdded, onUrlAdded, isGeneratin
               value={input}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              disabled={isGenerating}
+              disabled={isGenerating || isProcessingFiles}
               className="flex-1 w-full px-3 py-2 rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none min-h-[40px] max-h-[120px] overflow-y-auto"
               rows={1}
             />
@@ -213,7 +214,7 @@ export function ChatInput({ onSendMessage, onFilesAdded, onUrlAdded, isGeneratin
               )}
             </>
           ) : (
-            <Button onClick={handleSend} disabled={!input.trim()} size="icon" title="Send message">
+            <Button onClick={handleSend} disabled={!input.trim() || isProcessingFiles} size="icon" title={isProcessingFiles ? "Please wait for files to process" : "Send message"}>
               <Send className="h-4 w-4" />
             </Button>
           )}

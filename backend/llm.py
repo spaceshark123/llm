@@ -52,10 +52,34 @@ chat_with_history = RunnableWithMessageHistory(
     history_messages_key="chat_history",
 )
 
-def chat(input_str: str, session_id: str = "default") -> str:
-    """Send a message and get a response with conversation history."""
+def chat(input_str: str, session_id: str = "default", file_contents: dict = None, file_metadata: list = None) -> str:
+    """Send a message and get a response with conversation history.
+    
+    Args:
+        input_str: The user's message
+        session_id: The session ID for conversation history
+        file_contents: Dictionary mapping file names to their extracted text content
+        file_metadata: List of file metadata objects with name, type, size
+    """
+    # Prepare file context if files are provided
+    file_context = ""
+    if file_metadata and file_contents:
+        file_context = "\n\n[FILE CONTEXT]\n"
+        for file_info in file_metadata:
+            file_name = file_info.get('name', 'unknown')
+            file_type = file_info.get('type', 'unknown')
+            file_context += f"\n--- {file_name} ({file_type}) ---\n"
+            if file_name in file_contents:
+                file_context += file_contents[file_name]
+            else:
+                file_context += "[File content not available]"
+        file_context += "\n[END FILE CONTEXT]\n"
+    
+    # Combine file context with user input
+    full_input = file_context + input_str if file_context else input_str
+    
     response = chat_with_history.invoke(
-        {"input": input_str},
+        {"input": full_input},
         config={"configurable": {"session_id": session_id}}
     )
     return response

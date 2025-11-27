@@ -29,6 +29,7 @@ interface ChatInterfaceProps {
   currentSessionIndex: number
   setSessions: (sessions: Session[]) => void
   setCurrentSessionIndex: (index: number) => void
+  processingFiles?: Set<string>
 }
 
 export function ChatInterface({
@@ -53,6 +54,7 @@ export function ChatInterface({
   currentSessionIndex,
   setSessions,
   setCurrentSessionIndex,
+  processingFiles = new Set(),
 }: ChatInterfaceProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [isDragOverChat, setIsDragOverChat] = useState(false)
@@ -63,13 +65,13 @@ export function ChatInterface({
     const fileArray = Array.from(files)
     const validFiles = fileArray.filter((file) => {
       const ext = file.name.split(".").pop()?.toLowerCase()
-      return ["pdf", "txt", "doc", "docx"].includes(ext || "")
+      return ["pdf", "txt", "doc", "docx", "png", "jpg", "jpeg"].includes(ext || "")
     })
 
     if (validFiles.length > 0) {
       onFilesAdded(validFiles)
     } else if (fileArray.length > 0) {
-      alert("Please upload PDF, TXT, DOC, or DOCX files only.")
+      alert("Please upload PDF, TXT, DOC, DOCX, PNG, JPG, or JPEG files only.")
     }
   }
 
@@ -206,6 +208,7 @@ export function ChatInterface({
             onAnswerNow={onAnswerNow}
             streamingStarted={streamingStarted}
             controlsLocked={controlsLocked}
+            isProcessingFiles={processingFiles.size > 0}
           />
         </div>
       </div>

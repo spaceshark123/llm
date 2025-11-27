@@ -14,46 +14,44 @@ interface ChatMessagesProps {
 export function ChatMessages({ messages, onStreamingComplete, onStreamingStart }: ChatMessagesProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const observerRef = useRef<MutationObserver | null>(null)
-  const isStreamingRef = useRef(false)
+  const scrollTimeoutRef = useRef<number | null>(null)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }
 
+  // Scroll when messages array changes (new message added)
   useEffect(() => {
     scrollToBottom()
-  }, [messages])
+  }, [messages.length])
 
-  // Manage mutation observer for streaming auto-scroll
+  // Debounced scroll during streaming to avoid excessive scrolling
   useEffect(() => {
-    // Check if any message is currently streaming OR completing with Answer Now
     const isAnyStreaming = messages.some(msg => msg.isStreaming || msg.truncatedContent === "__COMPLETE__")
     
-    // Only update observer if state actually changed
-    if (isAnyStreaming === isStreamingRef.current) {
-      return
-    }
-    
-    isStreamingRef.current = isAnyStreaming
-    
     if (!isAnyStreaming) {
-      // Stop observing when nothing is streaming
-      if (observerRef.current) {
-        observerRef.current.disconnect()
-        observerRef.current = null
+      // Not streaming - scroll immediately
+      scrollToBottom()
+      if (scrollTimeoutRef.current !== null) {
+        clearTimeout(scrollTimeoutRef.current)
+        scrollTimeoutRef.current = null
       }
       return
     }
     
-    // Start observing only when streaming or completing
-    if (!observerRef.current && scrollRef.current) {
-      observerRef.current = new MutationObserver(scrollToBottom)
-      observerRef.current.observe(scrollRef.current, {
-        childList: true,
-        subtree: true,
-        characterData: true,
-      })
+    // During streaming - debounce scroll to every 100ms to avoid cascading re-renders
+    if (scrollTimeoutRef.current === null) {
+      scrollTimeoutRef.current = window.setTimeout(() => {
+        scrollToBottom()
+        scrollTimeoutRef.current = null
+      }, 100)
+    }
+    
+    return () => {
+      if (scrollTimeoutRef.current !== null) {
+        clearTimeout(scrollTimeoutRef.current)
+        scrollTimeoutRef.current = null
+      }
     }
   }, [messages])
 
@@ -79,14 +77,10 @@ export function ChatMessages({ messages, onStreamingComplete, onStreamingStart }
                 {message.role === "assistant" ? "Assistant" : "You"}
               </span>
               <span className="text-xs text-muted-foreground">
-                {message.timestamp
-                  ? new Date(message.timestamp).toLocaleString(undefined, {
-                      month: "short",
-                      day: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })
-                  : ""}
+                {new Date(message.timestamp).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
               </span>
             </div>
             <StreamingText 
