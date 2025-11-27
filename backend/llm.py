@@ -9,7 +9,6 @@ from langchain_community.document_loaders import DirectoryLoader
 import os
 from dotenv import load_dotenv
 from history import ChatMessageHistoryWithTimestamps
-from app import DATA_DIR
 
 # Load environment variables
 load_dotenv()

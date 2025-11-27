@@ -16,7 +16,7 @@ embeddings = HuggingFaceEmbeddings(
     )
 
 def load_documents():
-    loader = DirectoryLoader(DATA_PATH)
+    loader = DirectoryLoader(DATA_PATH, glob="*.md")
     documents = loader.load()
     return documents
 

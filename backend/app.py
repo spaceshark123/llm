@@ -17,6 +17,20 @@ try:
 except ImportError:
 	PDF_AVAILABLE = False
 	print("Warning: pypdf not installed. PDF processing will be limited.")
+ 
+ # Check for docx availability
+try:
+	import docx
+	DOCX_AVAILABLE = True
+except ImportError:
+	DOCX_AVAILABLE = False
+
+# For older .doc files (optional - requires additional setup)
+try:
+	import textract
+	TEXTRACT_AVAILABLE = True
+except ImportError:
+	TEXTRACT_AVAILABLE = False
 
 # Initialize EasyOCR reader globally
 ocr_reader = None
@@ -43,6 +57,7 @@ def initialize_easyocr():
 initialize_easyocr()
 
 DATA_PATH = 'data'
+TEMP_PATH = 'temp'
 # clear and recreate data folder
 if os.path.exists(DATA_PATH):
 	shutil.rmtree(DATA_PATH)
@@ -58,7 +73,7 @@ app.config['CORS_SUPPORTS_CREDENTIALS'] = True
 
 CORS(app)
 
-def extract_text_from_image(image_file):
+def extract_image_text(image_file):
 	"""Extract text from image file using EasyOCR."""
 	if not EASYOCR_AVAILABLE or ocr_reader is None:
 		return f"[Image OCR unavailable - easyocr not installed]"
@@ -153,6 +168,115 @@ def extract_pdf_text(pdf_file):
 		print(f"PDF processing error: {str(e)}")
 		return f"[Failed to process PDF: {str(e)}]"
 
+def extract_docx_text(doc_file):
+	"""Extract text from DOCX/DOC file."""
+	if not DOCX_AVAILABLE:
+		return f"[DOCX processing unavailable - python-docx not installed]"
+	
+	try:
+		# Get filename
+		filename = getattr(doc_file, 'filename', 'document')
+		file_extension = filename.lower().split('.')[-1] if '.' in filename else ''
+		
+		# Handle old .doc format (binary)
+		if file_extension == 'doc':
+			return handle_old_doc_format(doc_file, filename)
+		
+		# Handle .docx format (modern XML-based)
+		# Read file into memory
+		file_data = doc_file.read()
+		doc_file.seek(0)  # Reset file position
+		
+		# Load document from bytes
+		doc = docx.Document(io.BytesIO(file_data))
+		
+		# Extract all text from paragraphs
+		text_parts = []
+		
+		# Extract paragraphs
+		for paragraph in doc.paragraphs:
+			if paragraph.text.strip():
+				text_parts.append(paragraph.text)
+		
+		# Extract text from tables
+		for table in doc.tables:
+			for row in table.rows:
+				row_text = []
+				for cell in row.cells:
+					if cell.text.strip():
+						row_text.append(cell.text.strip())
+				if row_text:
+					text_parts.append(' | '.join(row_text))
+		
+		# Extract text from headers and footers
+		for section in doc.sections:
+			# Header
+			if section.header:
+				for paragraph in section.header.paragraphs:
+					if paragraph.text.strip():
+						text_parts.append(f"[Header: {paragraph.text}]")
+			
+			# Footer
+			if section.footer:
+				for paragraph in section.footer.paragraphs:
+					if paragraph.text.strip():
+						text_parts.append(f"[Footer: {paragraph.text}]")
+		
+		# Combine all text
+		text = '\n'.join(text_parts)
+		
+		if not text.strip():
+			return f"[Document File: {filename}]\nNo text detected in document."
+		
+		return text
+		
+	except Exception as e:
+		print(f"DOCX processing error for {filename}: {str(e)}")
+		return f"[Failed to process document: {str(e)}]"
+
+
+def handle_old_doc_format(doc_file, filename):
+	"""Handle old .doc format (binary/OLE format)."""
+	# Old .doc files are complex binary format
+	# Best approach: inform user to convert to .docx or use OCR on PDF export
+	
+	try:
+		if not TEXTRACT_AVAILABLE:
+			return f"[Old .doc processing unavailable - textract not installed]\n" \
+				   f"Please convert {filename} to .docx or PDF format."
+		
+		# temporary save the file to disk for textract processing
+		if not os.path.exists(TEMP_PATH):	
+			os.makedirs(TEMP_PATH)
+		doc_file.save(os.path.join(TEMP_PATH, filename + "_temp.doc"))
+		text = textract.process(os.path.join(TEMP_PATH, filename + "_temp.doc"), extension='doc').decode('utf-8')
+
+		if not text.strip():
+			return f"[Document File: {filename}]\nNo text detected in document."
+		
+		return text
+	except Exception as e:
+		return f"[Failed to process old .doc format: {str(e)}]\n" \
+			   f"Please convert {filename} to .docx or PDF format."
+
+
+def extract_document_text(doc_file):
+	"""
+	Unified function to extract text from various document formats.
+	Automatically detects format based on file extension.
+	"""
+	filename = getattr(doc_file, 'filename', 'document')
+	file_extension = filename.lower().split('.')[-1] if '.' in filename else ''
+	
+	if file_extension in ['docx', 'doc']:
+		return extract_docx_text(doc_file)
+	elif file_extension == 'pdf':
+		return extract_pdf_text(doc_file)
+	elif file_extension in ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff']:
+		return extract_image_text(doc_file)
+	else:
+		return f"[Unsupported file format: {file_extension}]"
+
 @app.route('/')
 def home():
 	return jsonify({'message': 'Welcome to the Chat API!'})
@@ -192,50 +316,6 @@ def chat_endpoint():
 			file_contents = {}
 			files = []
 			urls = []
-		
-		# Process uploaded PDF files
-		if 'pdf_files' in request.files:
-			pdf_files = request.files.getlist('pdf_files')
-			for pdf_file in pdf_files:
-				print(f"Processing uploaded PDF: {pdf_file.filename}")
-				pdf_text = extract_pdf_text(pdf_file)
-				file_contents[pdf_file.filename] = pdf_text
-				
-				# Add to file metadata if not already there
-				file_exists = any(f['name'] == pdf_file.filename for f in files)
-				if not file_exists:
-					# Get file size before reading
-					pdf_file.seek(0, os.SEEK_END)
-					file_size = pdf_file.tell()
-					pdf_file.seek(0)
-					
-					files.append({
-						'name': pdf_file.filename,
-						'type': 'application/pdf',
-						'size': file_size
-					})
-		
-		# Process uploaded image files (PNG, JPG, JPEG, GIF)
-		if 'image_files' in request.files:
-			image_files = request.files.getlist('image_files')
-			for image_file in image_files:
-				print(f"Processing uploaded image: {image_file.filename}")
-				image_text = extract_text_from_image(image_file)
-				file_contents[image_file.filename] = image_text
-				
-				# Add to file metadata if not already there
-				file_exists = any(f['name'] == image_file.filename for f in files)
-				if not file_exists:
-					# Get file size before reading
-					image_file.seek(0, os.SEEK_END)
-					file_size = image_file.tell()
-					image_file.seek(0)
-					
-					files.append({
-						'name': image_file.filename,
-						'type': image_file.content_type or 'image/unknown',
-						'size': file_size
-					})
 
 	print("Message:", message)
 	print("Files:", [f.get('name') if isinstance(f, dict) else f for f in files])
@@ -280,12 +360,17 @@ def source_endpoint():
 		if file.filename == '':
 			return jsonify({'error': 'No selected file'}), 400
 		
-		# store file in data folder in session subfolder
+		# use ocr to extract text if image, pdf, or docx
+		extracted_text = extract_document_text(file)
+		print(f"Extracted text from {file.filename}:\n{extracted_text[:500]}...")  # Print first 500 chars
+
+		# store file in data folder in session subfolder as .md file with extracted text
 		session_folder = os.path.join(DATA_PATH, session_id)
 		if not os.path.exists(session_folder):
 			os.makedirs(session_folder)
-		file_path = os.path.join(session_folder, file.filename)
-		file.save(file_path)
+		file_path = os.path.join(session_folder, f"{file.filename}.md")
+		with open(file_path, 'w') as f:
+			f.write(extracted_text)
 		return jsonify({'message': f'File saved to {file_path}'}), 200
 
 # get/clear session history endpoint
