@@ -357,9 +357,11 @@ function App() {
     }
 
     // Process each file with OCR
+
     for (const file of files) {
       const fileId = `${file.name}-${file.size}-${file.lastModified}`
       setProcessingFiles((prev) => new Set([...prev, fileId]))
+
       await fetch(API_URL + '/sources', {
         method: 'POST',
         headers: {
@@ -396,86 +398,6 @@ function App() {
       //     return newSet
       //   })
       // }
-    }
-  }
-
-  const extractTextFromFile = async (file: File): Promise<string> => {
-    const fileType = file.name.split(".").pop()?.toLowerCase()
-    const mimeType = file.type.toLowerCase()
-    console.log(`Extracting text from ${file.name} (type: ${fileType}, mime: ${mimeType})`)
-    
-    try {
-      if (fileType === "txt") {
-        // For text files, read the content directly
-        return new Promise((resolve, reject) => {
-          const reader = new FileReader()
-          reader.onload = (e) => {
-            const text = e.target?.result as string
-            console.log(`Text file read: ${text.length} characters`)
-            resolve(text)
-          }
-          reader.onerror = reject
-          reader.readAsText(file)
-        })
-      } else if (["png", "jpg", "jpeg", "gif", "bmp"].includes(fileType || "") || mimeType.startsWith("image/")) {
-        // For images, return marker - backend will handle with EasyOCR
-        console.log(`Preparing image for backend EasyOCR processing: ${file.name}`)
-        return `[Image File: ${file.name}]\nFile will be processed by the server using EasyOCR.`
-      } else if (fileType === "pdf" || mimeType === "application/pdf") {
-        // For PDF files, return a marker indicating backend should process it
-        try {
-          console.log(`Preparing PDF for backend processing: ${file.name}`)
-          return `[PDF File: ${file.name}]\nFile will be processed by the server.`
-        } catch (error) {
-          console.error("PDF preparation error:", error)
-          return `[PDF File: ${file.name}]\nPDF processing error: ${(error as Error).message}`
-        }
-      } else if (fileType === "docx") {
-        // For DOCX files, use mammoth
-        try {
-          console.log(`Starting DOCX text extraction for: ${file.name}`)
-          const mammoth = await import('mammoth')
-          
-          const arrayBuffer = await file.arrayBuffer()
-          const result = await mammoth.default.extractRawText({ arrayBuffer })
-          
-          console.log(`DOCX extraction completed: ${result.value.length} characters extracted`)
-          return result.value || `[DOCX File: ${file.name}]\nNo text detected in document.`
-        } catch (error) {
-          console.error("DOCX extraction error:", error)
-          return `[DOCX File: ${file.name}]\nFailed to extract text from DOCX: ${(error as Error).message}`
-        }
-      } else if (fileType === "doc") {
-        // For DOC files, try multiple approaches
-        try {
-          console.log(`Starting DOC text extraction for: ${file.name}`)
-          const mammoth = await import('mammoth')
-          const arrayBuffer = await file.arrayBuffer()
-          
-          // Try to extract as if it were a docx
-          try {
-            const result = await mammoth.default.extractRawText({ arrayBuffer })
-            if (result.value && result.value.trim().length > 0) {
-              console.log(`DOC extraction completed: ${result.value.length} characters extracted`)
-              return result.value
-            }
-          } catch (mammothError) {
-            console.warn("Mammoth extraction failed for DOC:", mammothError)
-          }
-          
-          // If mammoth fails, return a helpful message
-          console.log(`DOC format: Unable to extract - legacy format`)
-          return `[DOC File: ${file.name}]\nLegacy DOC format detected. For best results, please convert this file to DOCX format. The server will attempt to process it, but text extraction may be incomplete.`
-        } catch (error) {
-          console.error("DOC extraction error:", error)
-          return `[DOC File: ${file.name}]\nFailed to process legacy DOC file: ${(error as Error).message}`
-        }
-      } else {
-        return `[File: ${file.name}]\nFile type not fully supported for client-side processing.`
-      }
-    } catch (error) {
-      console.error("Error extracting text from file:", error)
-      return `[File: ${file.name}]\nError processing file: ${(error as Error).message}`
     }
   }
 
@@ -606,6 +528,7 @@ function App() {
       onStreamingStart={handleStreamingStart}
       streamingStarted={streamingStarted}
       controlsLocked={controlsLocked}
+      processingFiles={processingFiles}
       sessions={sessions}
       currentSessionIndex={currentSessionIndex}
       setSessions={setSessions}

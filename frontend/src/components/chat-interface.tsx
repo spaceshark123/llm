@@ -89,7 +89,7 @@ export function ChatInterface({
     const fileArray = Array.from(files)
     const validFiles = fileArray.filter((file) => {
       const ext = file.name.split(".").pop()?.toLowerCase()
-      return ["pdf", "txt", "doc", "docx", "png", "jpg", "jpeg"].includes(ext || "")
+      return ["pdf", "txt", "docx", "png", "jpg", "jpeg"].includes(ext || "")
     })
 
     if (validFiles.length > 0) {
@@ -99,7 +99,7 @@ export function ChatInterface({
       setSelectedFiles(newSelection)
       onSelectedFilesChange?.(newSelection)
     } else if (fileArray.length > 0) {
-      alert("Please upload PDF, TXT, DOC, DOCX, PNG, JPG, or JPEG files only.")
+      alert("Please upload PDF, TXT, DOCX, PNG, JPG, or JPEG files only.")
     }
   }
 
@@ -251,6 +251,7 @@ export function ChatInterface({
                   <SourceManager
                     files={uploadedFiles}
                     urls={uploadedUrls}
+                    processingFiles={processingFiles}
                     onRemoveFile={onRemoveFile}
                     onRemoveUrl={onRemoveUrl}
                     selectedFiles={selectedFiles}

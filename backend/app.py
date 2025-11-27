@@ -25,13 +25,6 @@ try:
 except ImportError:
 	DOCX_AVAILABLE = False
 
-# For older .doc files (optional - requires additional setup)
-try:
-	import textract
-	TEXTRACT_AVAILABLE = True
-except ImportError:
-	TEXTRACT_AVAILABLE = False
-
 # Initialize EasyOCR reader globally
 ocr_reader = None
 EASYOCR_AVAILABLE = False
@@ -240,24 +233,7 @@ def handle_old_doc_format(doc_file, filename):
 	# Old .doc files are complex binary format
 	# Best approach: inform user to convert to .docx or use OCR on PDF export
 	
-	try:
-		if not TEXTRACT_AVAILABLE:
-			return f"[Old .doc processing unavailable - textract not installed]\n" \
-				   f"Please convert {filename} to .docx or PDF format."
-		
-		# temporary save the file to disk for textract processing
-		if not os.path.exists(TEMP_PATH):	
-			os.makedirs(TEMP_PATH)
-		doc_file.save(os.path.join(TEMP_PATH, filename + "_temp.doc"))
-		text = textract.process(os.path.join(TEMP_PATH, filename + "_temp.doc"), extension='doc').decode('utf-8')
-
-		if not text.strip():
-			return f"[Document File: {filename}]\nNo text detected in document."
-		
-		return text
-	except Exception as e:
-		return f"[Failed to process old .doc format: {str(e)}]\n" \
-			   f"Please convert {filename} to .docx or PDF format."
+	return f"[Old .doc format detected for {filename}. Please convert to .docx or PDF for better text extraction.]"
 
 
 def extract_document_text(doc_file):
@@ -346,7 +322,7 @@ def source_endpoint():
 		if not filename:
 			return jsonify({'error': 'filename parameter is required for DELETE'}), 400
 		session_folder = os.path.join(DATA_PATH, session_id)
-		file_path = os.path.join(session_folder, filename)
+		file_path = os.path.join(session_folder, filename + '.md')
 		if os.path.exists(file_path):
 			os.remove(file_path)
 			return jsonify({'message': f'File {filename} deleted from session {session_id}'}), 200

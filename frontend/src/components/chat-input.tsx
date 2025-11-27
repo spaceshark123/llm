@@ -91,13 +91,13 @@ export function ChatInput({ onSendMessage, onFilesAdded, onUrlAdded, isGeneratin
     const fileArray = Array.from(files)
     const validFiles = fileArray.filter((file) => {
       const ext = file.name.split(".").pop()?.toLowerCase()
-      return ["pdf", "txt", "doc", "docx", "png", "jpg", "jpeg"].includes(ext || "")
+      return ["pdf", "txt", "docx", "png", "jpg", "jpeg"].includes(ext || "")
     })
 
     if (validFiles.length > 0) {
       onFilesAdded(validFiles)
     } else if (fileArray.length > 0) {
-      alert("Please upload PDF, TXT, DOC, DOCX, PNG, JPG, or JPEG files only.")
+      alert("Please upload PDF, TXT, DOCX, PNG, JPG, or JPEG files only.")
     }
   }
 
@@ -127,7 +127,7 @@ export function ChatInput({ onSendMessage, onFilesAdded, onUrlAdded, isGeneratin
           {/* File upload */}
           <Dialog>
             <DialogTrigger asChild>
-              <Button variant="outline" size="icon" title="Upload file (PDF, TXT, DOC, DOCX, PNG, JPG, JPEG)" className="cursor-pointer">
+              <Button variant="outline" size="icon" title="Upload file (PDF, TXT, DOCX, PNG, JPG, JPEG)" className="cursor-pointer">
                 <Paperclip className="h-4 w-4" />
               </Button>
             </DialogTrigger>
@@ -136,12 +136,12 @@ export function ChatInput({ onSendMessage, onFilesAdded, onUrlAdded, isGeneratin
                 <DialogTitle>Upload Files</DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">Supported formats: PDF, TXT, DOC, DOCX, PNG, JPG, JPEG</p>
+                <p className="text-sm text-muted-foreground">Supported formats: PDF, TXT, DOCX, PNG, JPG, JPEG</p>
                 <input
                   ref={fileInputRef}
                   type="file"
                   multiple
-                  accept=".pdf,.txt,.doc,.docx,.png,.jpg,.jpeg"
+                  accept=".pdf,.txt,.docx,.png,.jpg,.jpeg"
                   onChange={handleFileSelect}
                   className="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 file:cursor-pointer"
                 />

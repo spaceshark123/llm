@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button"
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { X, FileText, Globe, ChevronDown, ChevronUp } from "lucide-react"
+import { Spinner } from "@/components/ui/spinner"
 
 interface SourceManagerProps {
   files: File[]
@@ -15,23 +16,29 @@ interface SourceManagerProps {
   onDeselectAllFiles?: () => void
   onSelectAllUrls?: () => void
   onDeselectAllUrls?: () => void
+  processingFiles?: Set<string>
 }
 
-export function SourceManager({ 
-  files, 
-  urls, 
-  onRemoveFile, 
+export function SourceManager({
+  files,
+  urls,
+  onRemoveFile,
   onRemoveUrl,
-  selectedFiles = new Set(Array.from({length: files.length}, (_, i) => i)),
-  selectedUrls = new Set(Array.from({length: urls.length}, (_, i) => i)),
+  selectedFiles = new Set(Array.from({ length: files.length }, (_, i) => i)),
+  selectedUrls = new Set(Array.from({ length: urls.length }, (_, i) => i)),
   onToggleFile,
   onToggleUrl,
   onSelectAllFiles,
   onDeselectAllFiles,
   onSelectAllUrls,
-  onDeselectAllUrls
+  onDeselectAllUrls,
+  processingFiles = new Set<string>(),
 }: SourceManagerProps) {
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(true)
+  const processingArray = useMemo(() => 
+    Array.from(processingFiles), 
+    [processingFiles]
+  );
 
   if (files.length === 0 && urls.length === 0) {
     return null
@@ -79,28 +86,30 @@ export function SourceManager({
             </Button>
           )}
         </div>
-        
+
         {expanded && (
           <div className="flex flex-wrap gap-2">
             {/* Files */}
             {files.map((file, idx) => {
               const isSelected = selectedFiles.has(idx)
+              console.log('processingFiles:', processingFiles);
+              console.log('file.name:', file.name);
               return (
                 <div
                   key={`file-${idx}`}
-                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm transition-colors ${
-                    isSelected
-                      ? "bg-primary/10 border border-primary/20"
-                      : "bg-muted border border-muted-foreground/20 opacity-50"
-                  }`}
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm transition-colors ${isSelected
+                    ? "bg-primary/10 border border-primary/20"
+                    : "bg-muted border border-muted-foreground/20 opacity-50"
+                    }`}
                 >
-                  <input
+                  {processingArray.some((name) => name.includes(file.name)) ? <Spinner /> : <input
                     type="checkbox"
                     checked={isSelected}
                     onChange={() => onToggleFile?.(idx)}
                     className="h-4 w-4 cursor-pointer"
                     title="Include/exclude this file"
                   />
+                  }
                   <FileText className="h-3.5 w-3.5 text-primary" />
                   <span className="text-foreground truncate max-w-[120px]">{file.name}</span>
                   <Button
@@ -122,11 +131,10 @@ export function SourceManager({
               return (
                 <div
                   key={`url-${idx}`}
-                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm transition-colors ${
-                    isSelected
-                      ? "bg-accent/10 border border-accent/20"
-                      : "bg-muted border border-muted-foreground/20 opacity-50"
-                  }`}
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm transition-colors ${isSelected
+                    ? "bg-accent/10 border border-accent/20"
+                    : "bg-muted border border-muted-foreground/20 opacity-50"
+                    }`}
                 >
                   <input
                     type="checkbox"
