@@ -22,6 +22,7 @@ export function ChatMessages({ messages, onStreamingComplete, onStreamingStart }
   const userScrolledRef = useRef(false)
   const isStreamingRef = useRef(false)
   const messageIdsRef = useRef<string[]>([])
+  const scrollIntervalIdRef = useRef<number | null>(null)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -75,6 +76,7 @@ export function ChatMessages({ messages, onStreamingComplete, onStreamingStart }
         scrollToBottom()
       }
     }, 100)
+    scrollIntervalIdRef.current = interval
 
     return () => clearInterval(interval)
   }, [messages.length])
@@ -112,7 +114,11 @@ export function ChatMessages({ messages, onStreamingComplete, onStreamingStart }
               isStreaming={message.isStreaming}
               speed={0.5}
               truncatedContent={message.truncatedContent}
-              onFinishStreaming={() => onStreamingComplete?.(message.id)}
+              onFinishStreaming={() => {
+                onStreamingComplete?.(message.id)
+                clearInterval(scrollIntervalIdRef.current || undefined)
+                isStreamingRef.current = false
+              }}
               onStartStreaming={() => onStreamingStart?.(message.id)}
               isUserMessage={message.role === "user"}
             />
