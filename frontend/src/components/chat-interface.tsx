@@ -4,7 +4,7 @@ import { ChatInput } from "./chat-input"
 import { SourceManager } from "./source-manager"
 import type { ChatMessage } from "@/types/chat"
 import { Button } from "@/components/ui/button"
-import { RotateCcw, Menu, Upload } from "lucide-react"
+import { SquarePen, Menu, Upload } from "lucide-react"
 import type { Session } from "@/types/session"
 
 interface ChatInterfaceProps {
@@ -181,7 +181,6 @@ export function ChatInterface({
           <div className="space-y-4">
             {/* New Chat Section */}
             <div className="space-y-2">
-              <div className="text-sm font-semibold text-muted-foreground px-2">New</div>
               {messages.length > 0 && (
                 <Button
                   onClick={onClearChat}
@@ -189,7 +188,7 @@ export function ChatInterface({
                   size="sm"
                   className="w-full justify-start gap-2 bg-transparent cursor-pointer"
                 >
-                  <RotateCcw className="h-4 w-4" />
+                  <SquarePen className="h-4 w-4" />
                   New Chat
                 </Button>
               )}

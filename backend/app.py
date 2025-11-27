@@ -309,8 +309,8 @@ def chat_endpoint():
 	reply = chat(message, session_id=session_id, file_contents=file_contents, file_metadata=files, urls=urls)
 	return jsonify({'reply': reply})
 
-# upload/delete source
-@app.route('/api/sources', methods=['POST', 'DELETE'])
+# upload/delete/get sources
+@app.route('/api/sources', methods=['POST', 'DELETE', 'GET'])
 def source_endpoint():
 	session_id = request.headers.get('Session-ID')
 	if not session_id or session_id.strip() == "":
@@ -348,6 +348,13 @@ def source_endpoint():
 		with open(file_path, 'w') as f:
 			f.write(extracted_text)
 		return jsonify({'message': f'File saved to {file_path}'}), 200
+	elif request.method == 'GET':
+		# list files in session folder
+		session_folder = os.path.join(DATA_PATH, session_id)
+		if not os.path.exists(session_folder):
+			return jsonify({'files': []}), 200
+		files = [f[:-3] for f in os.listdir(session_folder) if f.endswith('.md')]
+		return jsonify({'files': files}), 200
 
 # get/clear session history endpoint
 @app.route('/api/history', methods=['GET', 'DELETE'])
