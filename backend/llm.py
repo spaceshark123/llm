@@ -3,9 +3,13 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_core.chat_history import InMemoryChatMessageHistory
+from langchain_community.vectorstores import Chroma
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.document_loaders import DirectoryLoader
 import os
 from dotenv import load_dotenv
 from history import ChatMessageHistoryWithTimestamps
+from app import DATA_DIR
 
 # Load environment variables
 load_dotenv()
@@ -17,25 +21,9 @@ if not GROQ_API_KEY:
 TEMPERATURE = float(os.getenv("TEMPERATURE", "0.7"))
 MODEL_NAME = os.getenv("MODEL_NAME", "llama-3.1-8b-instant")
 SYSTEM_PROMPT = """You are a helpful and knowledgeable AI assistant. Respond in markdown."""
+CHROMA_PATH = "chroma"
 
-# Initialize LLM
-llm = ChatGroq(
-    model_name=MODEL_NAME,
-    temperature=TEMPERATURE,
-    api_key=GROQ_API_KEY,
-)
-
-# Prompt with history placeholder
-prompt = ChatPromptTemplate.from_messages([
-    ("system", SYSTEM_PROMPT),
-    MessagesPlaceholder(variable_name="chat_history"),
-    ("human", "{input}")
-])
-
-# Create chain
-chain = prompt | llm | StrOutputParser()
-
-# Session store
+# Session store (for conversation histories)
 store = {}
 
 def get_session_history(session_id: str) -> ChatMessageHistoryWithTimestamps:
@@ -43,14 +31,6 @@ def get_session_history(session_id: str) -> ChatMessageHistoryWithTimestamps:
     if session_id not in store:
         store[session_id] = ChatMessageHistoryWithTimestamps()
     return store[session_id]
-
-# Wrap chain with message history
-chat_with_history = RunnableWithMessageHistory(
-    chain,
-    get_session_history=get_session_history,
-    input_messages_key="input",
-    history_messages_key="chat_history",
-)
 
 def chat(input_str: str, session_id: str = "default", file_contents: dict = None, file_metadata: list = None, urls: list = None) -> str:
     """Send a message and get a response with conversation history.
@@ -124,6 +104,31 @@ def clear_session(session_id: str):
     """Clear the message history for a session."""
     if session_id in store:
         del store[session_id]
+    
+# Initialize LLM
+llm = ChatGroq(
+    model_name=MODEL_NAME,
+    temperature=TEMPERATURE,
+    api_key=GROQ_API_KEY,
+)
+
+# Prompt with history placeholder
+prompt = ChatPromptTemplate.from_messages([
+    ("system", SYSTEM_PROMPT),
+    MessagesPlaceholder(variable_name="chat_history"),
+    ("human", "{input}")
+])
+
+# Create chain
+chain = prompt | llm | StrOutputParser()
+
+# Wrap chain with message history
+chat_with_history = RunnableWithMessageHistory(
+    chain,
+    get_session_history=get_session_history,
+    input_messages_key="input",
+    history_messages_key="chat_history",
+)
 
 # Example usage
 if __name__ == "__main__":

@@ -1,3 +1,4 @@
+import shutil
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
@@ -41,9 +42,11 @@ def initialize_easyocr():
 # Initialize on startup
 initialize_easyocr()
 
-DATA_DIR = 'data'
-if not os.path.exists(DATA_DIR):
-	os.makedirs(DATA_DIR)
+DATA_PATH = 'data'
+# clear and recreate data folder
+if os.path.exists(DATA_PATH):
+	shutil.rmtree(DATA_PATH)
+os.makedirs(DATA_PATH)
 
 load_dotenv()
 PORT = int(os.getenv('BACKEND_PORT', 5050))
@@ -262,7 +265,7 @@ def source_endpoint():
 		filename = request.args.get('filename')
 		if not filename:
 			return jsonify({'error': 'filename parameter is required for DELETE'}), 400
-		session_folder = os.path.join(DATA_DIR, session_id)
+		session_folder = os.path.join(DATA_PATH, session_id)
 		file_path = os.path.join(session_folder, filename)
 		if os.path.exists(file_path):
 			os.remove(file_path)
@@ -278,7 +281,7 @@ def source_endpoint():
 			return jsonify({'error': 'No selected file'}), 400
 		
 		# store file in data folder in session subfolder
-		session_folder = os.path.join(DATA_DIR, session_id)
+		session_folder = os.path.join(DATA_PATH, session_id)
 		if not os.path.exists(session_folder):
 			os.makedirs(session_folder)
 		file_path = os.path.join(session_folder, file.filename)
