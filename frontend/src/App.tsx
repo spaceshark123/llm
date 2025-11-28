@@ -28,7 +28,6 @@ function App() {
   const [sessions, setSessions] = useState<Session[]>([])
   const [currentSessionIndex, setCurrentSessionIndex] = useState(-1)
   const [processingFiles, setProcessingFiles] = useState<Set<string>>(new Set())
-  const [fileOcrContent, setFileOcrContent] = useState<Map<string, string>>(new Map())
   const currentMessageIdRef = useRef<string | null>(null)
   const activeGenerationIdRef = useRef<number | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -195,12 +194,10 @@ function App() {
       return
     }
 
-    // Build file metadata and contents from OCR results
+    // Build file metadata
     // Only include selected files and URLs
     const fileMetadata: Array<{ name: string; type: string; size: number }> = []
     const fileContents: { [key: string]: string } = {}
-    const pdfFiles: File[] = []
-    const imageFiles: File[] = []
 
     uploadedFiles.forEach((file, fileIndex) => {
       // Skip files that are not selected
@@ -208,26 +205,12 @@ function App() {
         console.log(`Skipping deselected file: ${file.name}`)
         return
       }
-
-      const fileId = `${file.name}-${file.size}-${file.lastModified}`
-      const ocrContent = fileOcrContent.get(fileId)
-      if (ocrContent) {
-        fileMetadata.push({
-          name: file.name,
-          type: file.type,
-          size: file.size,
-        })
-        fileContents[file.name] = ocrContent
-
-        // Collect PDF files for multipart upload
-        if (file.type === 'application/pdf') {
-          pdfFiles.push(file)
-        }
-        // Collect image files for multipart upload with backend EasyOCR
-        else if (['image/png', 'image/jpeg', 'image/gif', 'image/bmp'].includes(file.type)) {
-          imageFiles.push(file)
-        }
-      }
+      
+      fileMetadata.push({
+        name: file.name,
+        type: file.type,
+        size: file.size,
+      })
     })
 
     // Filter URLs to only include selected ones
@@ -297,56 +280,26 @@ function App() {
       sessionId = sessions[currentSessionIndex]?.id
     }
 
-    // Use the fileMetadata, fileContents, pdfFiles, imageFiles, selectedUrls already built above
+    // Log details
     console.log(`Sending message with ${fileMetadata.length} files and ${selectedUrls.length} URLs`)
     console.log("File contents details:", Object.keys(fileContents))
 
     let response
     let data
     try {
-      // If there are PDF or image files, use FormData for file upload
-      if (pdfFiles.length > 0 || imageFiles.length > 0) {
-        const formData = new FormData()
-        formData.append('message', content)
-        formData.append('fileContents', JSON.stringify(fileContents))
-        formData.append('fileMetadata', JSON.stringify(fileMetadata))
-        formData.append('urls', JSON.stringify(selectedUrls))
-
-        // Append each PDF file
-        pdfFiles.forEach((file) => {
-          formData.append('pdf_files', file, file.name)
-        })
-
-        // Append each image file for backend EasyOCR processing
-        imageFiles.forEach((file) => {
-          formData.append('image_files', file, file.name)
-        })
-
-        response = await fetch(`${API_URL}/chat`, {
-          method: 'POST',
-          headers: {
-            'Session-ID': sessionId,
-          },
-          body: formData,
-          signal: controller.signal,
-        })
-      } else {
-        // Use JSON for non-PDF/image files
-        response = await fetch(`${API_URL}/chat`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Session-ID': sessionId,
-          },
-          body: JSON.stringify({
-            message: content,
-            files: fileMetadata,
-            fileContents: fileContents,
-            urls: selectedUrls,
-          }),
-          signal: controller.signal,
-        })
-      }
+      // Use JSON body to send message and file metadata
+      response = await fetch(`${API_URL}/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Session-ID': sessionId,
+        },
+        body: JSON.stringify({
+          message: content,
+          selectedSources: fileMetadata.map(f => ({ name: f.name, size: f.size })), // send selected file names and sizes for RAG filtering
+        }),
+        signal: controller.signal,
+      })
 
       data = await response.json();
       console.log("Backend response:", data);
@@ -420,7 +373,7 @@ function App() {
       sessionId = sessions[currentSessionIndex]?.id
     }
 
-    // Process each file with OCR
+    // Process each file 
 
     for (const file of files) {
       const fileId = `${file.name}-${file.size}-${file.lastModified}`
@@ -438,30 +391,12 @@ function App() {
         })(),
       })
 
-      // For now, we skip client-side OCR and let backend handle all files
-      setFileOcrContent((prev) => new Map([...prev, [fileId, `File ${file.name} will be processed by the server.`]]))
+      // Remove from processing set
       setProcessingFiles((prev) => {
         const newSet = new Set(prev)
         newSet.delete(fileId)
         return newSet
       })
-      // console.log(`Starting OCR processing for: ${file.name}`)
-
-      // try {
-      //   const text = await extractTextFromFile(file)
-      //   console.log(`OCR completed for ${file.name}, extracted ${text.length} characters`)
-      //   setFileOcrContent((prev) => new Map([...prev, [fileId, text]]))
-      // } catch (error) {
-      //   console.error(`Failed to process file ${file.name}:`, error)
-      //   // Still mark as processed even if failed, but with empty content
-      //   setFileOcrContent((prev) => new Map([...prev, [fileId, ""]]))
-      // } finally {
-      //   setProcessingFiles((prev) => {
-      //     const newSet = new Set(prev)
-      //     newSet.delete(fileId)
-      //     return newSet
-      //   })
-      // }
     }
   }
 

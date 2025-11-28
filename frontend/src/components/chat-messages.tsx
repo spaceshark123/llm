@@ -112,6 +112,7 @@ export function ChatMessages({ messages, onStreamingComplete, onStreamingStart }
               onFinishStreaming={() => {
                 onStreamingComplete?.(message.id)
                 clearInterval(scrollIntervalIdRef.current || undefined)
+                scrollToBottom()
                 isStreamingRef.current = false
               }}
               onStartStreaming={() => onStreamingStart?.(message.id)}

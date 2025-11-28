@@ -280,32 +280,20 @@ def chat_endpoint():
 		# Handle JSON request
 		data = request.get_json()
 		message = data.get('message')
-		files = data.get('files', [])
-		file_contents = data.get('fileContents', {})
-		urls = data.get('urls', [])
+		selected_sources = data.get('selectedSources', [])
 	else:
 		# Handle FormData request (for file uploads)
 		message = request.form.get('message')
 		
 		# Parse JSON fields from form data
-		file_contents_str = request.form.get('fileContents', '{}')
-		file_metadata_str = request.form.get('fileMetadata', '[]')
-		urls_str = request.form.get('urls', '[]')
-		
-		try:
-			file_contents = json.loads(file_contents_str)
-			files = json.loads(file_metadata_str)
-			urls = json.loads(urls_str)
-		except json.JSONDecodeError as e:
-			print(f"Error parsing JSON from form data: {e}")
-			file_contents = {}
-			files = []
-			urls = []
+		selected_sources_str = request.form.get('selectedSources', '[]')
+		try: 
+			selected_sources = json.loads(selected_sources_str)
+		except json.JSONDecodeError:
+			selected_sources = []
 
 	print("Message:", message)
-	print("Files:", [f.get('name') if isinstance(f, dict) else f for f in files])
-	print("File Contents Keys:", list(file_contents.keys()))
-	print("URLs:", urls)
+	print("Selected Sources:", selected_sources)
 
 	if not message:
 		return jsonify({'error': 'Input is required'}), 400
@@ -315,7 +303,9 @@ def chat_endpoint():
 	print("chat request for session:", session_id)
 
 	# Pass files and file_contents to chat function
-	reply = chat(message, session_id=session_id, db=db, file_contents=file_contents, file_metadata=files, urls=urls)
+	source_names = [f"data/{session_id}/{src['name']}.md" for src in selected_sources if src]
+	sources = [{'name': source_names[idx], 'size': selected_sources[idx]['size']} for idx in range(len(selected_sources)) if selected_sources[idx]]
+	reply = chat(message, session_id=session_id, db=db, selected_sources=sources)
 	return jsonify({'reply': reply})
 
 # upload/delete/get sources

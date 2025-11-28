@@ -33,8 +33,8 @@ If the context doesn't contain relevant information, say so and answer based on 
 store = {}
 
 print(f"RAG Enabled: {RAG_ENABLED}")
-        
-def retrieve_context(db: Chroma, query: str, top_k: int = RAG_TOP_K) -> tuple[str, list[dict]]:
+
+def retrieve_context(db: Chroma, query: str, top_k: int = RAG_TOP_K, selected_sources: list = None) -> tuple[str, list[dict]]:
     """Retrieve relevant context from the vector store.
     
     Returns:
@@ -45,7 +45,7 @@ def retrieve_context(db: Chroma, query: str, top_k: int = RAG_TOP_K) -> tuple[st
     
     try:
         # Search for relevant documents
-        results = db.similarity_search_with_score(query, k=top_k)
+        results = db.similarity_search_with_score(query, k=top_k, filter={"source": {"$in": selected_sources}} if selected_sources else None)
         
         if not results:
             return "", []
@@ -56,7 +56,7 @@ def retrieve_context(db: Chroma, query: str, top_k: int = RAG_TOP_K) -> tuple[st
         
         for i, (doc, score) in enumerate(results, 1):
             # Add document content
-            context_parts.append(f"[Document {i}]\n{doc.page_content}\n")
+            context_parts.append(f"[Document {i} - {doc.metadata.get('source', 'Unknown')}]\n{doc.page_content}\n")
             
             # Extract source info
             source = doc.metadata.get('source', 'Unknown')
@@ -79,15 +79,14 @@ def get_session_history(session_id: str) -> ChatMessageHistoryWithTimestamps:
         store[session_id] = ChatMessageHistoryWithTimestamps()
     return store[session_id]
 
-def chat(input_str: str, session_id: str = "default", db: Chroma = None, file_contents: dict = None, file_metadata: list = None, urls: list = None) -> str:
+def chat(input_str: str, session_id: str = "default", db: Chroma = None, selected_sources: list = None) -> str:
     """Send a message and get a response with conversation history.
     
     Args:
         input_str: The user's message
         session_id: The session ID for conversation history
-        file_contents: Dictionary mapping file names to their extracted text content
-        file_metadata: List of file metadata objects with name, type, size
-        urls: List of URLs included with the message
+        db: Optional Chroma DB for RAG
+        selected_sources: Optional list of selected source document names for RAG filtering. Each source has {name: str, size: int}
     """
     # Get session history and current message count
     history = get_session_history(session_id)
@@ -98,8 +97,10 @@ def chat(input_str: str, session_id: str = "default", db: Chroma = None, file_co
     rag_sources = []
     
     # Add RAG context if enabled
-    if RAG_ENABLED and db:
-        context, sources = retrieve_context(db=db, query=input_str)
+    if RAG_ENABLED and db and selected_sources is not None and len(selected_sources) > 0:
+        print(selected_sources)
+        selected_sources_names = [s['name'] for s in selected_sources if 'name' in s]
+        context, sources = retrieve_context(db=db, query=input_str, selected_sources=selected_sources_names)
         if context:
             full_input = f"""Context from knowledge base:
                         {context}
@@ -108,7 +109,7 @@ def chat(input_str: str, session_id: str = "default", db: Chroma = None, file_co
 
                         User question: {input_str}
 
-                        Please answer the user's question using the provided context when relevant."""
+                        Please answer the user's question using the provided context when relevant. When referencing context, refer to them as [X] where X is the source after the dash in the document title after all directory paths are stripped away and the .md extension is removed, but keep the extension right before the .md (example: data/session-0000/xxx.docx.md becomes xxx.docx)."""
             rag_sources = sources
             print(f"Retrieved {len(sources)} relevant documents for RAG")
     
@@ -130,10 +131,8 @@ def chat(input_str: str, session_id: str = "default", db: Chroma = None, file_co
         
     # Store metadata for the user message
     user_metadata = {}
-    if file_metadata:
-        user_metadata['fileMetadata'] = file_metadata
-    if urls:
-        user_metadata['urls'] = urls
+    if selected_sources:
+        user_metadata['fileMetadata'] = selected_sources
     user_metadata['originalInput'] = input_str
     if user_metadata:
         history.add_message_metadata(user_message_index, user_metadata)
