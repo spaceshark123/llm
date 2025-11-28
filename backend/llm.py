@@ -3,13 +3,14 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_core.chat_history import InMemoryChatMessageHistory
-from langchain_community.vectorstores import Chroma
+from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.document_loaders import DirectoryLoader
 import os
 from dotenv import load_dotenv
 from history import ChatMessageHistoryWithTimestamps
 from chroma import initialize_embeddings, get_or_create_db
+from embeddings import embeddings
 
 # Load environment variables
 load_dotenv()
@@ -31,33 +32,20 @@ If the context doesn't contain relevant information, say so and answer based on 
 # Session store (for conversation histories)
 store = {}
 
-# initialize embeddings
-embeddings = initialize_embeddings()
-
 print(f"RAG Enabled: {RAG_ENABLED}")
-
-# init chroma vector store
-vectorstore = None
-if RAG_ENABLED:
-    try:
-        vectorstore = get_or_create_db(embeddings)
-        print("Chroma vector store initialized.")
-    except Exception as e:
-        print("Error initializing Chroma vector store:", e)
-        vectorstore = None
         
-def retrieve_context(query: str, top_k: int = RAG_TOP_K) -> tuple[str, list[dict]]:
+def retrieve_context(db: Chroma, query: str, top_k: int = RAG_TOP_K) -> tuple[str, list[dict]]:
     """Retrieve relevant context from the vector store.
     
     Returns:
         tuple: (context_text, sources_metadata)
     """
-    if not vectorstore:
+    if not db:
         return "", []
     
     try:
         # Search for relevant documents
-        results = vectorstore.similarity_search_with_score(query, k=top_k)
+        results = db.similarity_search_with_score(query, k=top_k)
         
         if not results:
             return "", []
@@ -91,7 +79,7 @@ def get_session_history(session_id: str) -> ChatMessageHistoryWithTimestamps:
         store[session_id] = ChatMessageHistoryWithTimestamps()
     return store[session_id]
 
-def chat(input_str: str, session_id: str = "default", file_contents: dict = None, file_metadata: list = None, urls: list = None) -> str:
+def chat(input_str: str, session_id: str = "default", db: Chroma = None, file_contents: dict = None, file_metadata: list = None, urls: list = None) -> str:
     """Send a message and get a response with conversation history.
     
     Args:
@@ -110,8 +98,8 @@ def chat(input_str: str, session_id: str = "default", file_contents: dict = None
     rag_sources = []
     
     # Add RAG context if enabled
-    if RAG_ENABLED and vectorstore:
-        context, sources = retrieve_context(input_str)
+    if RAG_ENABLED and db:
+        context, sources = retrieve_context(db=db, query=input_str)
         if context:
             full_input = f"""Context from knowledge base:
                         {context}
@@ -160,8 +148,9 @@ def chat(input_str: str, session_id: str = "default", file_contents: dict = None
     # if urls:
     #     all_sources.extend(urls)
     if rag_sources:
-        all_sources.extend([s['name'] for s in rag_sources])
-    
+        all_sources.extend([s['name'].replace(".md", "") for s in rag_sources])
+        all_sources = list(set(all_sources))  # Remove duplicates
+        
     if all_sources:
         ai_metadata['sources'] = all_sources
         # if rag_sources:
@@ -176,22 +165,6 @@ def clear_session(session_id: str):
     """Clear the message history for a session."""
     if session_id in store:
         del store[session_id]
-        
-def reload_vectorstore():
-    """Reload the vector store (useful after adding new documents)."""
-    global vectorstore
-    if RAG_ENABLED and os.path.exists(CHROMA_PATH):
-        try:
-            vectorstore = Chroma(
-                persist_directory=CHROMA_PATH,
-                embedding_function=embeddings
-            )
-            print(f"Vector store reloaded from {CHROMA_PATH}")
-            return True
-        except Exception as e:
-            print(f"Error reloading vector store: {e}")
-            return False
-    return False
     
 # Initialize LLM
 llm = ChatGroq(
@@ -225,8 +198,10 @@ if __name__ == "__main__":
     print("\nUser: What's my name?")
     print("Assistant:", chat("What's my name?"))
     
-    # Test RAG if available
-    if vectorstore:
+    from db import db
+    
+    # Test RAG
+    if db:
         print("\n--- Testing RAG ---")
         print("User: What information do you have in your knowledge base?")
-        print("Assistant:", chat("What information do you have in your knowledge base?"))
+        print("Assistant:", chat("What information do you have in your knowledge base?", db=db))

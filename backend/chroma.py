@@ -9,7 +9,6 @@ import hashlib
 from pathlib import Path
 from dotenv import load_dotenv
 
-
 # Load environment variables
 load_dotenv()
 DATA_PATH = os.getenv("DATA_PATH", "data")
@@ -133,13 +132,11 @@ def remove_documents_by_source(db: Chroma, source: str):
 	except Exception as e:
 		print(f"Error removing documents: {e}")
 
-def add_documents_to_chroma(embeddings: HuggingFaceEmbeddings, chunks: list[Document]):
+def add_documents_to_chroma(db: Chroma, embeddings: HuggingFaceEmbeddings, chunks: list[Document]):
 	"""Add new document chunks to existing Chroma DB."""
 	if not chunks:
 		print("No chunks to add.")
 		return
-	
-	db = get_or_create_db(embeddings)
 	
 	# Group chunks by source to handle updates
 	sources = set(chunk.metadata.get('source', '') for chunk in chunks)
@@ -175,7 +172,7 @@ def rebuild_database(embeddings: HuggingFaceEmbeddings):
 		processed[str(filepath)] = get_file_hash(str(filepath))
 	save_processed_files(processed)
 
-def update_database(embeddings: HuggingFaceEmbeddings):
+def update_database(db: Chroma, embeddings: HuggingFaceEmbeddings):
 	"""Update the database with new or modified documents only."""
 	processed_files = load_processed_files()
 	new_or_modified = get_new_or_modified_files(processed_files)
@@ -193,7 +190,7 @@ def update_database(embeddings: HuggingFaceEmbeddings):
 	chunks = split_text(documents)
 	
 	# Add to existing database
-	add_documents_to_chroma(embeddings, chunks)
+	add_documents_to_chroma(db, embeddings, chunks)
 
 	# Update processed files record
 	for filepath in new_or_modified:
@@ -202,7 +199,7 @@ def update_database(embeddings: HuggingFaceEmbeddings):
 	
 	print("Database update complete!")
 
-def add_single_document(embeddings: HuggingFaceEmbeddings, filepath: str):
+def add_single_document(db: Chroma, embeddings: HuggingFaceEmbeddings, filepath: str):
 	"""Add or update a single document in the database."""
 	if not os.path.exists(filepath):
 		print(f"File not found: {filepath}")
@@ -215,7 +212,7 @@ def add_single_document(embeddings: HuggingFaceEmbeddings, filepath: str):
 	chunks = split_text(documents)
 	
 	# Add to database
-	add_documents_to_chroma(embeddings, chunks)
+	add_documents_to_chroma(db, embeddings, chunks)
 
 	# Update processed files record
 	processed_files = load_processed_files()

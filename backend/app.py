@@ -10,6 +10,8 @@ from llm import chat, get_session_history, clear_session
 from langchain_core.messages import HumanMessage, AIMessage
 from dotenv import load_dotenv
 from history import ChatMessageHistoryWithTimestamps
+from chroma import add_single_document, get_or_create_db, rebuild_database, remove_documents_by_source
+from embeddings import embeddings
 
 try:
 	import pypdf
@@ -56,6 +58,8 @@ TEMP_PATH = os.getenv('TEMP_PATH', 'temp')
 if os.path.exists(DATA_PATH):
 	shutil.rmtree(DATA_PATH)
 os.makedirs(DATA_PATH)
+
+from db import db # initialize db after data is reset (so we start fresh)
 
 PORT = int(os.getenv('BACKEND_PORT', 5050))
 
@@ -311,7 +315,7 @@ def chat_endpoint():
 	print("chat request for session:", session_id)
 
 	# Pass files and file_contents to chat function
-	reply = chat(message, session_id=session_id, file_contents=file_contents, file_metadata=files, urls=urls)
+	reply = chat(message, session_id=session_id, db=db, file_contents=file_contents, file_metadata=files, urls=urls)
 	return jsonify({'reply': reply})
 
 # upload/delete/get sources
@@ -330,6 +334,8 @@ def source_endpoint():
 		file_path = os.path.join(session_folder, filename + '.md')
 		if os.path.exists(file_path):
 			os.remove(file_path)
+			# TODO: also remove from chroma vector store
+			remove_documents_by_source(db, file_path)
 			return jsonify({'message': f'File {filename} deleted from session {session_id}'}), 200
 		else:
 			return jsonify({'error': f'File {filename} not found in session {session_id}'}), 404
@@ -352,6 +358,9 @@ def source_endpoint():
 		file_path = os.path.join(session_folder, f"{file.filename}.md")
 		with open(file_path, 'w') as f:
 			f.write(extracted_text)
+   
+		# save to chroma vector store as well
+		add_single_document(db, embeddings, filepath=file_path)
 		return jsonify({'message': f'File saved to {file_path}'}), 200
 	elif request.method == 'GET':
 		# list files in session folder
