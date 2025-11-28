@@ -11,11 +11,6 @@ interface ChatMessagesProps {
   onStreamingStart?: (messageId: string) => void
 }
 
-// Remove FILE CONTEXT sections from user messages for display
-function cleanUserMessage(content: string): string {
-  return content.replace(/\[FILE CONTEXT\]([\s\S]*?)\[END FILE CONTEXT\]\n*/g, '').trim()
-}
-
 export function ChatMessages({ messages, onStreamingComplete, onStreamingStart }: ChatMessagesProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -110,7 +105,7 @@ export function ChatMessages({ messages, onStreamingComplete, onStreamingStart }
               </span>
             </div>
             <StreamingText 
-              content={message.role === "user" ? cleanUserMessage(message.content) : message.content} 
+              content={message.role === "user" ? message.originalInput || message.content : message.content} 
               isStreaming={message.isStreaming}
               speed={0.5}
               truncatedContent={message.truncatedContent}

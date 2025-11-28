@@ -420,6 +420,7 @@ def history_endpoint():
 				'id': str(index),
 				'role': 'assistant' if isinstance(msg, AIMessage) else 'user',
 				'content': msg.content,
+				'originalInput': session_history.get_message_metadata(index).get('originalInput'),
 				'sources': session_history.get_message_metadata(index).get('sources', []),
 				'timestamp': timestamp.isoformat(),
 				'isStreaming': False,

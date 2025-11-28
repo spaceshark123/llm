@@ -58,7 +58,7 @@ function App() {
         console.log("Fetched history for session:", session, historyData)
         let name = "New Session"
         if (historyData.history && historyData.history.length > 0) {
-          name = historyData.history[0].content.slice(0, 20)
+          name = (historyData.history[0].originalInput || historyData.history[0].content).slice(0, 20)
         } else {
           // no history, use file/url sources if any
           const sourcesResponse = await fetch(`${API_URL}/sources`, {
@@ -248,6 +248,7 @@ function App() {
       timestamp: new Date(),
       fileMetadata: fileMetadata.length > 0 ? fileMetadata : undefined,
       urls: selectedUrls.length > 0 ? selectedUrls : undefined,
+      originalInput: content,
     }
     // Store metadata in ref to preserve when history is refetched
     messagesMetadataRef.current.set(userMessage.id, {

@@ -134,6 +134,7 @@ def chat(input_str: str, session_id: str = "default", db: Chroma = None, file_co
         user_metadata['fileMetadata'] = file_metadata
     if urls:
         user_metadata['urls'] = urls
+    user_metadata['originalInput'] = input_str
     if user_metadata:
         history.add_message_metadata(user_message_index, user_metadata)
     
