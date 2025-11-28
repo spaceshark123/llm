@@ -626,11 +626,19 @@ def url_endpoint():
 			return jsonify({'error': 'URL not found'}), 404
 		
 		try:
+			# Remove from vector store first
+			session_db = get_session_db(session_id)
+			remove_documents_by_source(session_db, file_path)
+			print(f"Removed URL from vector store: {file_path}")
+			
+			# Then delete the file
 			os.remove(file_path)
 			print(f"Deleted URL file: {file_path}")
 			return jsonify({'message': 'URL deleted successfully'}), 200
 		except Exception as e:
-			print(f"Error deleting URL file: {e}")
+			print(f"Error deleting URL: {e}")
+			import traceback
+			traceback.print_exc()
 			return jsonify({'error': f'Failed to delete URL: {str(e)}'}), 500
 
 # get all sessions endpoint
