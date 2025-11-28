@@ -9,6 +9,7 @@ from langchain_community.document_loaders import DirectoryLoader
 import os
 from dotenv import load_dotenv
 from history import ChatMessageHistoryWithTimestamps
+from chroma import initialize_embeddings, get_or_create_db
 
 # Load environment variables
 load_dotenv()
@@ -19,11 +20,70 @@ if not GROQ_API_KEY:
 
 TEMPERATURE = float(os.getenv("TEMPERATURE", "0.7"))
 MODEL_NAME = os.getenv("MODEL_NAME", "llama-3.1-8b-instant")
-SYSTEM_PROMPT = """You are a helpful and knowledgeable AI assistant. Respond in markdown."""
 CHROMA_PATH = os.getenv("CHROMA_PATH", "chroma")
+RAG_ENABLED = os.getenv("RAG_ENABLED", "true").lower() == "true"
+RAG_TOP_K = int(os.getenv("RAG_TOP_K", "5"))
+SYSTEM_PROMPT = """You are a helpful and knowledgeable AI assistant. Respond in markdown.
+
+When provided with context from documents, use that information to answer questions accurately.
+If the context doesn't contain relevant information, say so and answer based on your general knowledge."""
 
 # Session store (for conversation histories)
 store = {}
+
+# initialize embeddings
+embeddings = initialize_embeddings()
+
+print(f"RAG Enabled: {RAG_ENABLED}")
+
+# init chroma vector store
+vectorstore = None
+if RAG_ENABLED:
+    try:
+        vectorstore = get_or_create_db(embeddings)
+        print("Chroma vector store initialized.")
+    except Exception as e:
+        print("Error initializing Chroma vector store:", e)
+        vectorstore = None
+        
+def retrieve_context(query: str, top_k: int = RAG_TOP_K) -> tuple[str, list[dict]]:
+    """Retrieve relevant context from the vector store.
+    
+    Returns:
+        tuple: (context_text, sources_metadata)
+    """
+    if not vectorstore:
+        return "", []
+    
+    try:
+        # Search for relevant documents
+        results = vectorstore.similarity_search_with_score(query, k=top_k)
+        
+        if not results:
+            return "", []
+        
+        # Format context
+        context_parts = []
+        sources = []
+        
+        for i, (doc, score) in enumerate(results, 1):
+            # Add document content
+            context_parts.append(f"[Document {i}]\n{doc.page_content}\n")
+            
+            # Extract source info
+            source = doc.metadata.get('source', 'Unknown')
+            sources.append({
+                'name': os.path.basename(source),
+                'path': source,
+                'score': float(score)
+            })
+        
+        context_text = "\n".join(context_parts)
+        return context_text, sources
+        
+    except Exception as e:
+        print(f"Error retrieving context: {e}")
+        return "", []
 
 def get_session_history(session_id: str) -> ChatMessageHistoryWithTimestamps:
     """Return or create message history for a session."""
@@ -45,22 +105,24 @@ def chat(input_str: str, session_id: str = "default", file_contents: dict = None
     history = get_session_history(session_id)
     user_message_index = len(history.messages)
     
-    # Prepare file context if files are provided
-    file_context = ""
-    if file_metadata and file_contents:
-        file_context = "\n\n[FILE CONTEXT]\n"
-        for file_info in file_metadata:
-            file_name = file_info.get('name', 'unknown')
-            file_type = file_info.get('type', 'unknown')
-            file_context += f"\n--- {file_name} ({file_type}) ---\n"
-            if file_name in file_contents:
-                file_context += file_contents[file_name]
-            else:
-                file_context += "[File content not available]"
-        file_context += "\n[END FILE CONTEXT]\n"
+    # Combine RAG context with user input
+    full_input = input_str
+    rag_sources = []
     
-    # Combine file context with user input
-    full_input = file_context + input_str if file_context else input_str
+    # Add RAG context if enabled
+    if RAG_ENABLED and vectorstore:
+        context, sources = retrieve_context(input_str)
+        if context:
+            full_input = f"""Context from knowledge base:
+                        {context}
+
+                        ---
+
+                        User question: {input_str}
+
+                        Please answer the user's question using the provided context when relevant."""
+            rag_sources = sources
+            print(f"Retrieved {len(sources)} relevant documents for RAG")
     
     response = None
     try:
@@ -78,7 +140,7 @@ def chat(input_str: str, session_id: str = "default", file_contents: dict = None
         return "Error: An unexpected error occurred while processing your request."
         
         
-    # Store metadata for the user message that was just added
+    # Store metadata for the user message
     user_metadata = {}
     if file_metadata:
         user_metadata['fileMetadata'] = file_metadata
@@ -88,13 +150,24 @@ def chat(input_str: str, session_id: str = "default", file_contents: dict = None
         history.add_message_metadata(user_message_index, user_metadata)
     
     # Store metadata for the AI response message
-    ai_message_index = len(history.messages) - 1  # AI message was just added
+    ai_message_index = len(history.messages) - 1
     ai_metadata = {}
-    if file_metadata or urls:
-        ai_metadata['sources'] = [f['name'] for f in file_metadata] if file_metadata else []
-        if urls:
-            ai_metadata['sources'].extend(urls)
-    if ai_metadata and ai_metadata['sources']:
+    
+    # Combine all sources
+    all_sources = []
+    # if file_metadata:
+    #     all_sources.extend([f['name'] for f in file_metadata])
+    # if urls:
+    #     all_sources.extend(urls)
+    if rag_sources:
+        all_sources.extend([s['name'] for s in rag_sources])
+    
+    if all_sources:
+        ai_metadata['sources'] = all_sources
+        # if rag_sources:
+        #     ai_metadata['ragSources'] = rag_sources
+    
+    if ai_metadata:
         history.add_message_metadata(ai_message_index, ai_metadata)
     
     return response
@@ -103,6 +176,22 @@ def clear_session(session_id: str):
     """Clear the message history for a session."""
     if session_id in store:
         del store[session_id]
+        
+def reload_vectorstore():
+    """Reload the vector store (useful after adding new documents)."""
+    global vectorstore
+    if RAG_ENABLED and os.path.exists(CHROMA_PATH):
+        try:
+            vectorstore = Chroma(
+                persist_directory=CHROMA_PATH,
+                embedding_function=embeddings
+            )
+            print(f"Vector store reloaded from {CHROMA_PATH}")
+            return True
+        except Exception as e:
+            print(f"Error reloading vector store: {e}")
+            return False
+    return False
     
 # Initialize LLM
 llm = ChatGroq(
@@ -135,5 +224,9 @@ if __name__ == "__main__":
     print("Assistant:", chat("Hi, my name is Joe."))
     print("\nUser: What's my name?")
     print("Assistant:", chat("What's my name?"))
-    # test getting session history
-    print("session history:", get_session_history("default").messages)
+    
+    # Test RAG if available
+    if vectorstore:
+        print("\n--- Testing RAG ---")
+        print("User: What information do you have in your knowledge base?")
+        print("Assistant:", chat("What information do you have in your knowledge base?"))
