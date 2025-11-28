@@ -246,40 +246,6 @@ def add_single_document(db: Chroma, embeddings: HuggingFaceEmbeddings, filepath:
 	
 	print(f"Successfully added/updated: {filepath}")
 
-def add_single_document_no_chunking(db: Chroma, embeddings: HuggingFaceEmbeddings, filepath: str, session_id: str):
-	"""Add or update a single document WITHOUT chunking (keeps entire content as one document)."""
-	if not os.path.exists(filepath):
-		print(f"File not found: {filepath}")
-		return
-	
-	print(f"Processing file (no chunking): {filepath}")
-	
-	# Load the document
-	documents = load_specific_documents([filepath])
-	
-	if not documents:
-		print("No documents loaded.")
-		return
-	
-	print(f"Loaded {len(documents)} document(s) - keeping as single document")
-	
-	# Remove old version if exists
-	source = documents[0].metadata.get('source', '')
-	if source:
-		remove_documents_by_source(db, source)
-		print(f"Removed old chunks for source: {source}")
-	
-	# Add entire document without splitting
-	db.add_documents(documents)
-	print(f"Added {len(documents)} complete document(s) to database (no chunking).")
-
-	# Update processed files record
-	processed_files = load_processed_files(session_id)
-	processed_files[filepath] = get_file_hash(filepath)
-	save_processed_files(session_id, processed_files)
-	
-	print(f"Successfully added/updated: {filepath}")
-
 # Main execution
 if __name__ == "__main__":
 	embeddings = initialize_embeddings()

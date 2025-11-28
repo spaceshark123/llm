@@ -13,7 +13,7 @@ from llm import chat, get_session_history, clear_session
 from langchain_core.messages import HumanMessage, AIMessage
 from dotenv import load_dotenv
 from history import ChatMessageHistoryWithTimestamps
-from chroma import add_single_document, add_single_document_no_chunking, rebuild_database, remove_documents_by_source
+from chroma import add_single_document, rebuild_database, remove_documents_by_source
 from embeddings import embeddings
 
 try:
@@ -556,10 +556,10 @@ def url_endpoint():
 			
 			print(f"File saved, size: {os.path.getsize(file_path)} bytes")
 			
-			# Add to chroma vector store WITHOUT chunking (keep entire URL content as one document)
+			# Add to chroma vector store
 			session_db = get_session_db(session_id)
-			print(f"Adding to vector store for session: {session_id} (no chunking)")
-			add_single_document_no_chunking(session_db, embeddings, filepath=file_path, session_id=session_id)
+			print(f"Adding to vector store for session: {session_id}")
+			add_single_document(session_db, embeddings, filepath=file_path, session_id=session_id)
 			
 			print(f"URL processing complete: {url_hash}.web")
 			return jsonify({
