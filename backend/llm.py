@@ -45,8 +45,10 @@ def retrieve_context(db: Chroma, query: str, top_k: int = RAG_TOP_K, selected_so
     
     try:
         # Search for relevant documents
+        print(f"RAG: Searching with filter: {selected_sources if selected_sources else 'No filter'}")
         results = db.similarity_search_with_score(query, k=top_k, filter={"source": {"$in": selected_sources}} if selected_sources else None)
         
+        print(f"RAG: Found {len(results)} results")
         if not results:
             return "", []
         
@@ -98,8 +100,9 @@ def chat(input_str: str, session_id: str = "default", db: Chroma = None, selecte
     
     # Add RAG context if enabled
     if RAG_ENABLED and db and selected_sources is not None and len(selected_sources) > 0:
-        print(selected_sources)
+        print(f"RAG: Processing selected sources: {selected_sources}")
         selected_sources_names = [s['name'] for s in selected_sources if 'name' in s]
+        print(f"RAG: Filtered source names: {selected_sources_names}")
         context, sources = retrieve_context(db=db, query=input_str, selected_sources=selected_sources_names)
         if context:
             full_input = f"""Context from knowledge base:
@@ -198,10 +201,13 @@ if __name__ == "__main__":
     print("\nUser: What's my name?")
     print("Assistant:", chat("What's my name?"))
     
-    from db import db
+    from db import get_session_db
     
-    # Test RAG
-    if db:
+    # Test RAG with session-specific db
+    test_session = "test_session"
+    session_db = get_session_db(test_session)
+    
+    if session_db:
         print("\n--- Testing RAG ---")
         print("User: What information do you have in your knowledge base?")
-        print("Assistant:", chat("What information do you have in your knowledge base?", db=db))
+        print("Assistant:", chat("What information do you have in your knowledge base?", db=session_db, session_id=test_session))

@@ -10,7 +10,7 @@ from llm import chat, get_session_history, clear_session
 from langchain_core.messages import HumanMessage, AIMessage
 from dotenv import load_dotenv
 from history import ChatMessageHistoryWithTimestamps
-from chroma import add_single_document, get_or_create_db, rebuild_database, remove_documents_by_source
+from chroma import add_single_document, rebuild_database, remove_documents_by_source
 from embeddings import embeddings
 
 try:
@@ -59,7 +59,7 @@ if os.path.exists(DATA_PATH):
 	shutil.rmtree(DATA_PATH)
 os.makedirs(DATA_PATH)
 
-from db import db # initialize db after data is reset (so we start fresh)
+from db import get_session_db, clear_session_db  # Import session-aware functions
 
 PORT = int(os.getenv('BACKEND_PORT', 5050))
 
@@ -302,10 +302,15 @@ def chat_endpoint():
 
 	print("chat request for session:", session_id)
 
+	# Get session-specific database
+	session_db = get_session_db(session_id)
+
 	# Pass files and file_contents to chat function
-	source_names = [f"data/{session_id}/{src['name']}.md" for src in selected_sources if src]
+	# Use os.path.join to ensure correct path separators for the OS
+	source_names = [os.path.join(DATA_PATH, session_id, f"{src['name']}.md") for src in selected_sources if src]
 	sources = [{'name': source_names[idx], 'size': selected_sources[idx]['size']} for idx in range(len(selected_sources)) if selected_sources[idx]]
-	reply = chat(message, session_id=session_id, db=db, selected_sources=sources)
+	print(f"Constructed source paths: {source_names}")
+	reply = chat(message, session_id=session_id, db=session_db, selected_sources=sources)
 	return jsonify({'reply': reply})
 
 # upload/delete/get sources
@@ -324,8 +329,9 @@ def source_endpoint():
 		file_path = os.path.join(session_folder, filename + '.md')
 		if os.path.exists(file_path):
 			os.remove(file_path)
-			# TODO: also remove from chroma vector store
-			remove_documents_by_source(db, file_path)
+			# Remove from session's chroma vector store
+			session_db = get_session_db(session_id)
+			remove_documents_by_source(session_db, file_path)
 			return jsonify({'message': f'File {filename} deleted from session {session_id}'}), 200
 		else:
 			return jsonify({'error': f'File {filename} not found in session {session_id}'}), 404
@@ -346,11 +352,12 @@ def source_endpoint():
 		if not os.path.exists(session_folder):
 			os.makedirs(session_folder)
 		file_path = os.path.join(session_folder, f"{file.filename}.md")
-		with open(file_path, 'w') as f:
+		with open(file_path, 'w', encoding='utf-8') as f:
 			f.write(extracted_text)
    
 		# save to chroma vector store as well
-		add_single_document(db, embeddings, filepath=file_path)
+		session_db = get_session_db(session_id)
+		add_single_document(session_db, embeddings, filepath=file_path, session_id=session_id)
 		return jsonify({'message': f'File saved to {file_path}'}), 200
 	elif request.method == 'GET':
 		# list files in session folder
@@ -380,14 +387,16 @@ def history_endpoint():
 	
 	if request.method == 'DELETE':
 		clear_session(session_id)
+		# Clear session-specific chroma database
+		clear_session_db(session_id)
 		# also delete session folder
 		session_folder = os.path.join(DATA_PATH, session_id)
 		if os.path.exists(session_folder):
 			shutil.rmtree(session_folder)
-			print("Cleared history for session:", session_id)
+			print("Cleared history and database for session:", session_id)
 			return jsonify({'message': 'Session cleared'}), 200
 		else:
-			return jsonify({'message': 'Session folder not found, but history cleared'}), 200
+			return jsonify({'message': 'Session folder not found, but history and database cleared'}), 200
 	
 	if request.method == 'GET':
 		'''

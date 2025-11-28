@@ -12,10 +12,9 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 DATA_PATH = os.getenv("DATA_PATH", "data")
-CHROMA_PATH = os.getenv("CHROMA_PATH", "chroma")
+CHROMA_BASE_PATH = os.getenv("CHROMA_PATH", "chroma")
 CHUNK_SIZE = 300
 CHUNK_OVERLAP = 100
-METADATA_FILE = os.path.join(CHROMA_PATH, "processed_files.txt")
 
 def initialize_embeddings():
 	"""Initialize the HuggingFace embeddings."""
@@ -31,31 +30,46 @@ def get_file_hash(filepath: str) -> str:
 	with open(filepath, 'rb') as f:
 		return hashlib.md5(f.read()).hexdigest()
 
-def load_processed_files() -> dict:
+def get_session_chroma_path(session_id: str) -> str:
+	"""Get the chroma database path for a specific session."""
+	return os.path.join(CHROMA_BASE_PATH, session_id)
+
+def get_session_metadata_file(session_id: str) -> str:
+	"""Get the metadata file path for a specific session."""
+	return os.path.join(get_session_chroma_path(session_id), "processed_files.txt")
+
+def load_processed_files(session_id: str) -> dict:
 	"""Load the record of previously processed files and their hashes."""
-	if not os.path.exists(METADATA_FILE):
+	metadata_file = get_session_metadata_file(session_id)
+	if not os.path.exists(metadata_file):
 		return {}
 	
 	processed = {}
-	with open(METADATA_FILE, 'r') as f:
+	with open(metadata_file, 'r') as f:
 		for line in f:
 			if line.strip():
 				filepath, file_hash = line.strip().split('|')
 				processed[filepath] = file_hash
 	return processed
 
-def save_processed_files(processed: dict):
+def save_processed_files(session_id: str, processed: dict):
 	"""Save the record of processed files."""
-	os.makedirs(CHROMA_PATH, exist_ok=True)
-	with open(METADATA_FILE, 'w') as f:
+	chroma_path = get_session_chroma_path(session_id)
+	os.makedirs(chroma_path, exist_ok=True)
+	metadata_file = get_session_metadata_file(session_id)
+	with open(metadata_file, 'w') as f:
 		for filepath, file_hash in processed.items():
 			f.write(f"{filepath}|{file_hash}\n")
 
-def get_new_or_modified_files(processed_files: dict) -> list[str]:
-	"""Identify new or modified files in the data directory."""
+def get_new_or_modified_files(session_id: str, processed_files: dict) -> list[str]:
+	"""Identify new or modified files in the session's data directory."""
 	new_or_modified = []
+	session_data_path = os.path.join(DATA_PATH, session_id)
 	
-	for filepath in Path(DATA_PATH).glob("*.md"):
+	if not os.path.exists(session_data_path):
+		return []
+	
+	for filepath in Path(session_data_path).glob("*.md"):
 		filepath_str = str(filepath)
 		current_hash = get_file_hash(filepath_str)
 		
@@ -76,9 +90,12 @@ def load_specific_documents(filepaths: list[str]) -> list[Document]:
 		documents.extend(loader.load())
 	return documents
 
-def load_all_documents():
-	"""Load all documents from the data directory."""
-	loader = DirectoryLoader(DATA_PATH, glob="*.md")
+def load_all_documents(session_id: str):
+	"""Load all documents from the session's data directory."""
+	session_data_path = os.path.join(DATA_PATH, session_id)
+	if not os.path.exists(session_data_path):
+		return []
+	loader = DirectoryLoader(session_data_path, glob="*.md")
 	documents = loader.load()
 	return documents
 
@@ -101,24 +118,25 @@ def split_text(documents: list[Document]) -> list[Document]:
 	
 	return chunks
 
-def get_or_create_db(embeddings: HuggingFaceEmbeddings) -> Chroma:
-	"""Get existing Chroma DB or create a new one."""
-	if os.path.exists(CHROMA_PATH):
+def get_or_create_db(embeddings: HuggingFaceEmbeddings, session_id: str) -> Chroma:
+	"""Get existing Chroma DB for a session or create a new one."""
+	chroma_path = get_session_chroma_path(session_id)
+	if os.path.exists(chroma_path):
 		# Load existing database
 		db = Chroma(
-			persist_directory=CHROMA_PATH,
+			persist_directory=chroma_path,
 			embedding_function=embeddings
 		)
-		print(f"Loaded existing database from {CHROMA_PATH}")
+		print(f"Loaded existing database from {chroma_path}")
 		return db
 	else:
 		# Create new empty database
-		os.makedirs(CHROMA_PATH, exist_ok=True)
+		os.makedirs(chroma_path, exist_ok=True)
 		db = Chroma(
-			persist_directory=CHROMA_PATH,
+			persist_directory=chroma_path,
 			embedding_function=embeddings
 		)
-		print(f"Created new database at {CHROMA_PATH}")
+		print(f"Created new database at {chroma_path}")
 		return db
 
 def remove_documents_by_source(db: Chroma, source: str):
@@ -149,36 +167,43 @@ def add_documents_to_chroma(db: Chroma, embeddings: HuggingFaceEmbeddings, chunk
 	
 	# Add new chunks
 	db.add_documents(chunks)
-	print(f"Added {len(chunks)} chunks to {CHROMA_PATH}.")
+	print(f"Added {len(chunks)} chunks to database.")
 
-def rebuild_database(embeddings: HuggingFaceEmbeddings):
-	"""Completely rebuild the database from scratch."""
+def rebuild_database(embeddings: HuggingFaceEmbeddings, session_id: str):
+	"""Completely rebuild the database for a session from scratch."""
 	# Clear out the database
-	if os.path.exists(CHROMA_PATH):
-		shutil.rmtree(CHROMA_PATH)
+	chroma_path = get_session_chroma_path(session_id)
+	if os.path.exists(chroma_path):
+		shutil.rmtree(chroma_path)
 	
-	documents = load_all_documents()
+	documents = load_all_documents(session_id)
 	chunks = split_text(documents)
+	
+	if not chunks:
+		print(f"No documents to rebuild for session {session_id}")
+		return
 	
 	# Create new DB
 	db = Chroma.from_documents(
-		chunks, embeddings, persist_directory=CHROMA_PATH
+		chunks, embeddings, persist_directory=chroma_path
 	)
 	print(f"Rebuilt database with {len(chunks)} chunks.")
 	
 	# Update processed files record
 	processed = {}
-	for filepath in Path(DATA_PATH).glob("*.md"):
-		processed[str(filepath)] = get_file_hash(str(filepath))
-	save_processed_files(processed)
+	session_data_path = os.path.join(DATA_PATH, session_id)
+	if os.path.exists(session_data_path):
+		for filepath in Path(session_data_path).glob("*.md"):
+			processed[str(filepath)] = get_file_hash(str(filepath))
+	save_processed_files(session_id, processed)
 
-def update_database(db: Chroma, embeddings: HuggingFaceEmbeddings):
+def update_database(db: Chroma, embeddings: HuggingFaceEmbeddings, session_id: str):
 	"""Update the database with new or modified documents only."""
-	processed_files = load_processed_files()
-	new_or_modified = get_new_or_modified_files(processed_files)
+	processed_files = load_processed_files(session_id)
+	new_or_modified = get_new_or_modified_files(session_id, processed_files)
 	
 	if not new_or_modified:
-		print("No new or modified files. Database is up to date.")
+		print(f"No new or modified files for session {session_id}. Database is up to date.")
 		return
 	
 	print(f"Found {len(new_or_modified)} new or modified files:")
@@ -195,11 +220,11 @@ def update_database(db: Chroma, embeddings: HuggingFaceEmbeddings):
 	# Update processed files record
 	for filepath in new_or_modified:
 		processed_files[filepath] = get_file_hash(filepath)
-	save_processed_files(processed_files)
+	save_processed_files(session_id, processed_files)
 	
-	print("Database update complete!")
+	print(f"Database update complete for session {session_id}!")
 
-def add_single_document(db: Chroma, embeddings: HuggingFaceEmbeddings, filepath: str):
+def add_single_document(db: Chroma, embeddings: HuggingFaceEmbeddings, filepath: str, session_id: str):
 	"""Add or update a single document in the database."""
 	if not os.path.exists(filepath):
 		print(f"File not found: {filepath}")
@@ -215,9 +240,9 @@ def add_single_document(db: Chroma, embeddings: HuggingFaceEmbeddings, filepath:
 	add_documents_to_chroma(db, embeddings, chunks)
 
 	# Update processed files record
-	processed_files = load_processed_files()
+	processed_files = load_processed_files(session_id)
 	processed_files[filepath] = get_file_hash(filepath)
-	save_processed_files(processed_files)
+	save_processed_files(session_id, processed_files)
 	
 	print(f"Successfully added/updated: {filepath}")
 
@@ -229,22 +254,25 @@ if __name__ == "__main__":
 	
 	if len(sys.argv) > 1:
 		command = sys.argv[1]
+		session_id = sys.argv[2] if len(sys.argv) > 2 else "default"
 		
 		if command == "rebuild":
 			# Rebuild entire database
-			rebuild_database(embeddings)
+			rebuild_database(embeddings, session_id)
 		elif command == "update":
 			# Update with new/modified files
-			update_database(embeddings)
-		elif command == "add" and len(sys.argv) > 2:
+			db = get_or_create_db(embeddings, session_id)
+			update_database(db, embeddings, session_id)
+		elif command == "add" and len(sys.argv) > 3:
 			# Add specific file
-			filepath = sys.argv[2]
-			add_single_document(embeddings, filepath)
+			filepath = sys.argv[3]
+			db = get_or_create_db(embeddings, session_id)
+			add_single_document(db, embeddings, filepath, session_id)
 		else:
 			print("Usage:")
-			print("  python script.py rebuild  - Rebuild entire database")
-			print("  python script.py update   - Update with new/modified files")
-			print("  python script.py add <filepath> - Add specific file")
+			print("  python script.py rebuild <session_id>  - Rebuild entire database for session")
+			print("  python script.py update <session_id>   - Update with new/modified files for session")
+			print("  python script.py add <session_id> <filepath> - Add specific file to session")
 	else:
-		# Default: update database
-		update_database(embeddings)
+		# Default: show usage
+		print("Usage: Please specify command and session_id")
