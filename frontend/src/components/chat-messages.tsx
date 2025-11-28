@@ -11,6 +11,11 @@ interface ChatMessagesProps {
   onStreamingStart?: (messageId: string) => void
 }
 
+function cleanFileName(fileName: string): string {
+  // Remove directory paths and .md extension (should work for both Unix and Windows paths)
+  return fileName.replace(/^.*[\/\\]/, '').replace(/\.md$/, '');
+}
+
 export function ChatMessages({ messages, onStreamingComplete, onStreamingStart }: ChatMessagesProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -146,7 +151,7 @@ export function ChatMessages({ messages, onStreamingComplete, onStreamingStart }
                       key={idx}
                       className="inline-flex items-center gap-2 px-2 py-1 bg-muted rounded text-xs text-muted-foreground"
                     >
-                      <span>📄 {file.name}</span>
+                      <span>📄 {cleanFileName(file.name)}</span>
                       <span className="text-muted-foreground/70">({(file.size / 1024).toFixed(1)} KB)</span>
                     </div>
                   ))}
