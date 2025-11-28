@@ -59,6 +59,21 @@ function App() {
         let name = "New Session"
         if (historyData.history && historyData.history.length > 0) {
           name = historyData.history[0].content.slice(0, 20)
+        } else {
+          // no history, use file/url sources if any
+          const sourcesResponse = await fetch(`${API_URL}/sources`, {
+            method: 'GET',
+            headers: {
+              'Session-ID': session,
+            },
+          })
+          const sourcesData = await sourcesResponse.json()
+          console.log("Fetched sources for session:", session, sourcesData)
+          if (sourcesData.files && sourcesData.files.length > 0) {
+            name = sourcesData.files[0].name.slice(0, 20)
+          } else if (sourcesData.urls && sourcesData.urls.length > 0) {
+            name = sourcesData.urls[0].slice(0, 20)
+          }
         }
         return { id: session, name: name } as Session
       })

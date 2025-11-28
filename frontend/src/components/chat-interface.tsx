@@ -4,8 +4,9 @@ import { ChatInput } from "./chat-input"
 import { SourceManager } from "./source-manager"
 import type { ChatMessage } from "@/types/chat"
 import { Button } from "@/components/ui/button"
-import { SquarePen, Menu, Upload } from "lucide-react"
+import { SquarePen, Menu, Upload, X } from "lucide-react"
 import type { Session } from "@/types/session"
+import { API_BASE_URL } from "@/constants"
 
 interface ChatInterfaceProps {
   messages: ChatMessage[]
@@ -168,6 +169,25 @@ export function ChatInterface({
     validateAndProcessFiles(e.dataTransfer.files)
   }
 
+  const deleteSessionFolder = async (sessionId: string) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/history`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          "Session-ID": sessionId,
+        },
+      })
+      if (!response.ok) {
+        console.error("Failed to delete session folder:", response.statusText)
+      } else {
+        console.log("Session folder deleted successfully")
+      }
+    } catch (error) {
+      console.error("Error deleting session folder:", error)
+    }
+  }
+
   return (
     <div className="flex w-screen h-screen bg-background">
       <div
@@ -195,23 +215,36 @@ export function ChatInterface({
             {/* Chat History Section */}
             <div className="space-y-2">
               <div className="text-sm font-semibold text-muted-foreground px-2">History</div>
-              <div className="px-2 py-3 rounded bg-muted/30 border border-dashed border-border">
+              <div className="px-2 pt-2 rounded bg-muted/30 border border-dashed border-border">
                 {sessions.length > 0 ? (
                   sessions.map((session, index) => (
-                    <Button
-                      key={session.id}
-                      onClick={() => {
-                        setCurrentSessionIndex(index)
-                      }}
-                      variant="outline"
-                      size="sm"
-                      className={currentSessionIndex === index ? "w-full justify-start gap-2 bg-gray-700! mb-1 cursor-pointer" : "w-full justify-start gap-2 mb-1 cursor-pointer"}
-                    >
-                      {session.name}
-                    </Button>
+                    <div className={currentSessionIndex === index ? "rounded w-full flex flex-row align-middle items-center border border-border mb-2 bg-gray-700!" : "rounded w-full flex flex-row align-middle items-center mb-2 border-border border bg-muted"} key={session.id}>
+                      <Button
+                        onClick={() => {
+                          setCurrentSessionIndex(index)
+                        }}
+                        variant="outline"
+                        size="sm"
+                        className="text-left w-[90%] max-w-[90%] overflow-x-clip justify-start bg-transparent! border-none! cursor-pointer inline"
+                      >
+                        {session.name}
+                      </Button>
+                      <X className="rounded h-4 w-4 z-50 hover:text-red-500 hover:cursor-pointer" onClick={(e) => {
+                            e.stopPropagation()
+                            const newSessions = sessions.filter((_, i) => i !== index)
+                            setSessions(newSessions)
+                            if (currentSessionIndex === index) {
+                              setCurrentSessionIndex(-1)
+                            } else if (currentSessionIndex > index) {
+                              setCurrentSessionIndex(currentSessionIndex - 1)
+                            }
+                            // also delete session folder
+                            deleteSessionFolder(session.id)
+                          }} />
+                    </div>
                   ))
                 ) : (
-                  <p className="text-xs text-muted-foreground text-center">Chat history will appear here</p>
+                  <p className="text-xs text-muted-foreground text-center mb-2">Chat history will appear here</p>
                 )}
               </div>
             </div>

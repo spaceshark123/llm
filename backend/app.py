@@ -381,7 +381,14 @@ def history_endpoint():
 	
 	if request.method == 'DELETE':
 		clear_session(session_id)
-		return jsonify({'message': 'Session cleared'}), 200
+		# also delete session folder
+		session_folder = os.path.join(DATA_PATH, session_id)
+		if os.path.exists(session_folder):
+			shutil.rmtree(session_folder)
+			print("Cleared history for session:", session_id)
+			return jsonify({'message': 'Session cleared'}), 200
+		else:
+			return jsonify({'message': 'Session folder not found, but history cleared'}), 200
 	
 	if request.method == 'GET':
 		'''
