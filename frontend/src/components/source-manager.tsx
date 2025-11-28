@@ -5,7 +5,7 @@ import { Spinner } from "@/components/ui/spinner"
 
 interface SourceManagerProps {
   files: File[]
-  urls: string[]
+  urls: Array<{ url: string; urlHash: string; name: string }> | string[]
   onRemoveFile: (index: number) => void
   onRemoveUrl: (index: number) => void
   selectedFiles?: Set<number>
@@ -17,6 +17,7 @@ interface SourceManagerProps {
   onSelectAllUrls?: () => void
   onDeselectAllUrls?: () => void
   processingFiles?: Set<string>
+  processingUrls?: Set<string>
 }
 
 export function SourceManager({
@@ -33,14 +34,19 @@ export function SourceManager({
   onSelectAllUrls,
   onDeselectAllUrls,
   processingFiles = new Set<string>(),
+  processingUrls = new Set<string>(),
 }: SourceManagerProps) {
   const [expanded, setExpanded] = useState(true)
   const processingArray = useMemo(() => 
     Array.from(processingFiles), 
     [processingFiles]
   );
+  const processingUrlsArray = useMemo(() => 
+    Array.from(processingUrls), 
+    [processingUrls]
+  );
 
-  if (files.length === 0 && urls.length === 0) {
+  if (files.length === 0 && urls.length === 0 && processingUrls.size === 0) {
     return null
   }
 
@@ -128,6 +134,9 @@ export function SourceManager({
             {/* URLs */}
             {urls.map((url, idx) => {
               const isSelected = selectedUrls.has(idx)
+              const urlString = typeof url === 'string' ? url : url.url
+              const isProcessing = processingUrlsArray.includes(urlString)
+              
               return (
                 <div
                   key={`url-${idx}`}
@@ -136,15 +145,19 @@ export function SourceManager({
                     : "bg-muted border border-muted-foreground/20 opacity-50"
                     }`}
                 >
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => onToggleUrl?.(idx)}
-                    className="h-4 w-4 cursor-pointer"
-                    title="Include/exclude this URL"
-                  />
+                  {isProcessing ? (
+                    <Spinner />
+                  ) : (
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => onToggleUrl?.(idx)}
+                      className="h-4 w-4 cursor-pointer"
+                      title="Include/exclude this URL"
+                    />
+                  )}
                   <Globe className="h-3.5 w-3.5 text-accent-foreground" />
-                  <span className="text-foreground truncate max-w-[120px]">{url}</span>
+                  <span className="text-foreground truncate max-w-[120px]">{urlString}</span>
                   <Button
                     variant="ghost"
                     size="sm"

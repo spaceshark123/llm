@@ -6,11 +6,14 @@ import json
 import io
 import numpy as np
 from PIL import Image
+import requests
+from urllib.parse import urlparse, quote
+import hashlib
 from llm import chat, get_session_history, clear_session
 from langchain_core.messages import HumanMessage, AIMessage
 from dotenv import load_dotenv
 from history import ChatMessageHistoryWithTimestamps
-from chroma import add_single_document, rebuild_database, remove_documents_by_source
+from chroma import add_single_document, add_single_document_no_chunking, rebuild_database, remove_documents_by_source
 from embeddings import embeddings
 
 try:
@@ -240,6 +243,106 @@ def handle_old_doc_format(doc_file, filename):
 	return f"[Old .doc format detected for {filename}. Please convert to .docx or PDF for better text extraction.]"
 
 
+def extract_url_text(url: str) -> str:
+	"""Extract text from a URL by taking a screenshot and running OCR."""
+	print(f"Extracting text from URL: {url}")
+	
+	# Try Selenium + OCR first (best quality for visual content)
+	screenshot_image = None
+	try:
+		from selenium import webdriver
+		from selenium.webdriver.chrome.options import Options
+		
+		print("Attempting Selenium screenshot...")
+		# Setup Chrome options
+		chrome_options = Options()
+		chrome_options.add_argument('--headless')
+		chrome_options.add_argument('--no-sandbox')
+		chrome_options.add_argument('--disable-dev-shm-usage')
+		chrome_options.add_argument('--disable-gpu')
+		chrome_options.add_argument('--window-size=1920,1080')
+		
+		# Create driver
+		driver = webdriver.Chrome(options=chrome_options)
+		driver.get(url)
+		
+		# Wait for page to load
+		import time
+		time.sleep(3)  # Give page time to render
+		
+		# Take screenshot
+		screenshot_bytes = driver.get_screenshot_as_png()
+		driver.quit()
+		
+		# Convert to PIL Image
+		screenshot_image = Image.open(io.BytesIO(screenshot_bytes))
+		print("Screenshot captured successfully")
+		
+	except ImportError:
+		print("Selenium not available - will try BeautifulSoup fallback")
+	except Exception as selenium_error:
+		print(f"Selenium screenshot failed: {selenium_error}")
+	
+	# If we have a screenshot and OCR is available, use it
+	if screenshot_image and EASYOCR_AVAILABLE and ocr_reader is not None:
+		print("Running OCR on screenshot...")
+		try:
+			# Convert to RGB if necessary
+			if screenshot_image.mode != 'RGB':
+				screenshot_image = screenshot_image.convert('RGB')
+			
+			# Convert to numpy array for easyocr
+			image_array = np.array(screenshot_image)
+			
+			# Run OCR
+			ocr_result = ocr_reader.readtext(image_array, detail=1)
+			
+			if ocr_result:
+				# Extract text with confidence filtering
+				text_lines = [item[1] for item in ocr_result if item[2] > 0.3]
+				text = '\n'.join(text_lines)
+				
+				if text.strip():
+					print(f"OCR extracted {len(text_lines)} lines of text")
+					return f"[Website Content from {url}]\n(Extracted via Screenshot OCR)\n\n{text}"
+			
+			print("OCR found no text in screenshot")
+		except Exception as ocr_error:
+			print(f"OCR processing failed: {ocr_error}")
+	
+	# Fallback: Try BeautifulSoup HTML parsing
+	print("Attempting BeautifulSoup text extraction...")
+	try:
+		from bs4 import BeautifulSoup
+		response = requests.get(url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
+		response.raise_for_status()
+		
+		soup = BeautifulSoup(response.content, 'html.parser')
+		
+		# Remove script and style elements
+		for script in soup(["script", "style"]):
+			script.decompose()
+		
+		# Get text
+		text = soup.get_text(separator='\n')
+		
+		# Clean up whitespace
+		lines = (line.strip() for line in text.splitlines())
+		chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+		text = '\n'.join(chunk for chunk in chunks if chunk)
+		
+		if text.strip():
+			print(f"BeautifulSoup extracted text successfully")
+			return f"[Website Content from {url}]\n(Extracted via HTML parsing)\n\n{text}"
+		else:
+			return f"[Website: {url}]\nNo text content extracted."
+			
+	except ImportError:
+		return f"[Website: {url}]\nText extraction requires BeautifulSoup (bs4) to be installed."
+	except Exception as bs_error:
+		print(f"BeautifulSoup extraction failed: {bs_error}")
+		return f"[Error fetching URL: {url}]\n{str(bs_error)}"
+
 def extract_document_text(doc_file):
 	"""
 	Unified function to extract text from various document formats.
@@ -309,7 +412,16 @@ def chat_endpoint():
 	# Use os.path.join to ensure correct path separators for the OS
 	source_names = [os.path.join(DATA_PATH, session_id, f"{src['name']}.md") for src in selected_sources if src]
 	sources = [{'name': source_names[idx], 'size': selected_sources[idx]['size']} for idx in range(len(selected_sources)) if selected_sources[idx]]
+	print(f"Selected sources from frontend: {selected_sources}")
 	print(f"Constructed source paths: {source_names}")
+	
+	# Verify that the source files actually exist
+	for source_path in source_names:
+		if os.path.exists(source_path):
+			print(f"Found: {source_path}")
+		else:
+			print(f"Missing: {source_path}")
+	
 	reply = chat(message, session_id=session_id, db=session_db, selected_sources=sources)
 	return jsonify({'reply': reply})
 
@@ -360,14 +472,166 @@ def source_endpoint():
 		add_single_document(session_db, embeddings, filepath=file_path, session_id=session_id)
 		return jsonify({'message': f'File saved to {file_path}'}), 200
 	elif request.method == 'GET':
-		# list files in session folder
+		# list files in session folder (excluding .web.md files - those are listed via /api/urls)
 		session_folder = os.path.join(DATA_PATH, session_id)
 		if not os.path.exists(session_folder):
 			return jsonify({'files': []}), 200
-		file_names = [f[:-3] for f in os.listdir(session_folder) if f.endswith('.md')]
+		# Only include .md files that are NOT .web.md files
+		file_names = [f[:-3] for f in os.listdir(session_folder) if f.endswith('.md') and not f.endswith('.web.md')]
 		extensions = [file.rsplit('.', 1)[-1].lower() for file in file_names]
 		files = [{'name': name, 'extension': ext} for name, ext in zip(file_names, extensions)]
 		return jsonify({'files': files}), 200
+
+# URL management endpoint
+@app.route('/api/urls', methods=['POST', 'DELETE', 'GET'])
+def url_endpoint():
+	print(f"========== /api/urls {request.method} request received ==========")
+	session_id = request.headers.get('Session-ID')
+	
+	# Allow empty session for POST - we'll create one automatically
+	if request.method == 'POST' and (not session_id or session_id.strip() == ""):
+		# Generate a new session ID
+		import time
+		session_id = f"session-{int(time.time() * 1000)}"
+		print(f"No session provided, created new session: {session_id}")
+	elif not session_id or session_id.strip() == "":
+		return jsonify({'error': 'Session-ID header is required'}), 400
+	
+	print(f"Session ID: {session_id}")
+	
+	# Create session folder if it doesn't exist
+	session_folder = os.path.join(DATA_PATH, session_id)
+	if not os.path.exists(session_folder):
+		os.makedirs(session_folder)
+		print(f"Created session folder: {session_folder}")
+	
+	if request.method == 'DELETE':
+		# Delete URL by filename
+		url_hash = request.args.get('urlHash')
+		if not url_hash:
+			return jsonify({'error': 'urlHash parameter is required for DELETE'}), 400
+		
+		file_path = os.path.join(session_folder, f"{url_hash}.web.md")
+		if os.path.exists(file_path):
+			os.remove(file_path)
+			# Remove from session's chroma vector store
+			session_db = get_session_db(session_id)
+			remove_documents_by_source(session_db, file_path)
+			return jsonify({'message': f'URL deleted from session {session_id}'}), 200
+		else:
+			return jsonify({'error': f'URL not found in session {session_id}'}), 404
+			
+	elif request.method == 'POST':
+		try:
+			data = request.get_json()
+			print(f"Received POST data: {data}")
+			url = data.get('url')
+			
+			if not url:
+				print("ERROR: No URL provided in request")
+				return jsonify({'error': 'URL is required'}), 400
+			
+			# Validate URL
+			try:
+				parsed = urlparse(url)
+				if not parsed.scheme or not parsed.netloc:
+					return jsonify({'error': 'Invalid URL format'}), 400
+			except Exception:
+				return jsonify({'error': 'Invalid URL format'}), 400
+			
+			print(f"Processing URL: {url}")
+			
+			# Extract text from URL
+			extracted_text = extract_url_text(url)
+			print(f"Extracted text from {url}:\n{extracted_text[:500]}...")  # Print first 500 chars
+			
+			# Create a hash of the URL for the filename
+			url_hash = hashlib.md5(url.encode()).hexdigest()[:12]
+			
+			# Store as .web.md file
+			file_path = os.path.join(session_folder, f"{url_hash}.web.md")
+			print(f"Saving URL content to: {file_path}")
+			with open(file_path, 'w', encoding='utf-8') as f:
+				f.write(f"URL: {url}\n\n{extracted_text}")
+			
+			print(f"File saved, size: {os.path.getsize(file_path)} bytes")
+			
+			# Add to chroma vector store WITHOUT chunking (keep entire URL content as one document)
+			session_db = get_session_db(session_id)
+			print(f"Adding to vector store for session: {session_id} (no chunking)")
+			add_single_document_no_chunking(session_db, embeddings, filepath=file_path, session_id=session_id)
+			
+			print(f"URL processing complete: {url_hash}.web")
+			return jsonify({
+				'message': 'URL processed successfully',
+				'urlHash': url_hash,
+				'url': url,
+				'name': f"{url_hash}.web",
+				'sessionId': session_id  # Return session ID in case it was auto-created
+			}), 200
+			
+		except Exception as e:
+			print(f"ERROR in URL POST: {str(e)}")
+			import traceback
+			traceback.print_exc()
+			return jsonify({'error': f'Failed to process URL: {str(e)}'}), 500
+		
+	elif request.method == 'GET':
+		# List all URLs in session
+		print(f"GET URLs - checking folder: {session_folder}")
+		if not os.path.exists(session_folder):
+			print("Session folder doesn't exist, returning empty list")
+			return jsonify({'urls': []}), 200
+		
+		urls = []
+		all_files = os.listdir(session_folder)
+		print(f"Files in session folder: {all_files}")
+		
+		for filename in all_files:
+			if filename.endswith('.web.md'):
+				print(f"Found URL file: {filename}")
+				file_path = os.path.join(session_folder, filename)
+				try:
+					# Read the first line to get the URL
+					with open(file_path, 'r', encoding='utf-8') as f:
+						first_line = f.readline().strip()
+						if first_line.startswith('URL: '):
+							original_url = first_line[5:]  # Remove 'URL: ' prefix
+							url_hash = filename[:-7]  # Remove '.web.md'
+							url_obj = {
+								'url': original_url,
+								'urlHash': url_hash,
+								'name': f"{url_hash}.web"
+							}
+							print(f"  Returning URL object: {url_obj}")
+							urls.append(url_obj)
+				except Exception as e:
+					print(f"Error reading URL file {filename}: {e}")
+					continue
+		
+		print(f"Returning {len(urls)} URLs")
+		return jsonify({'urls': urls}), 200
+	
+	elif request.method == 'DELETE':
+		# Delete URL by urlHash
+		url_hash = request.args.get('urlHash')
+		if not url_hash:
+			return jsonify({'error': 'urlHash parameter is required'}), 400
+		
+		print(f"DELETE URL - urlHash: {url_hash}")
+		file_path = os.path.join(session_folder, f"{url_hash}.web.md")
+		
+		if not os.path.exists(file_path):
+			print(f"URL file not found: {file_path}")
+			return jsonify({'error': 'URL not found'}), 404
+		
+		try:
+			os.remove(file_path)
+			print(f"Deleted URL file: {file_path}")
+			return jsonify({'message': 'URL deleted successfully'}), 200
+		except Exception as e:
+			print(f"Error deleting URL file: {e}")
+			return jsonify({'error': f'Failed to delete URL: {str(e)}'}), 500
 
 # get all sessions endpoint
 @app.route('/api/sessions', methods=['GET'])

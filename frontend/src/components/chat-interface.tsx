@@ -11,7 +11,7 @@ import { API_BASE_URL } from "@/constants"
 interface ChatInterfaceProps {
   messages: ChatMessage[]
   uploadedFiles: File[]
-  uploadedUrls: string[]
+  uploadedUrls: Array<{ url: string; urlHash: string; name: string }>
   onSendMessage: (message: string) => void
   onFilesAdded: (files: File[]) => void
   onUrlAdded: (url: string) => void
@@ -31,6 +31,7 @@ interface ChatInterfaceProps {
   setSessions: (sessions: Session[]) => void
   setCurrentSessionIndex: (index: number) => void
   processingFiles?: Set<string>
+  processingUrls?: Set<string>
   onSelectedFilesChange?: (selectedFiles: Set<number>) => void
   onSelectedUrlsChange?: (selectedUrls: Set<number>) => void
 }
@@ -58,6 +59,7 @@ export function ChatInterface({
   setSessions,
   setCurrentSessionIndex,
   processingFiles = new Set(),
+  processingUrls = new Set(),
   onSelectedFilesChange,
   onSelectedUrlsChange,
 }: ChatInterfaceProps) {
@@ -277,11 +279,12 @@ export function ChatInterface({
             <div className="w-full scroll-auto">
               {/* Sources section */}
               <div className="sticky top-0 z-40 bg-background border-b border-border">
-                {(uploadedFiles.length > 0 || uploadedUrls.length > 0 || processingFiles.size > 0) && (
+                {(uploadedFiles.length > 0 || uploadedUrls.length > 0 || processingFiles.size > 0 || processingUrls.size > 0) && (
                   <SourceManager
                     files={uploadedFiles}
                     urls={uploadedUrls}
                     processingFiles={processingFiles}
+                    processingUrls={processingUrls}
                     onRemoveFile={onRemoveFile}
                     onRemoveUrl={onRemoveUrl}
                     selectedFiles={selectedFiles}
@@ -331,7 +334,7 @@ export function ChatInterface({
             onAnswerNow={onAnswerNow}
             streamingStarted={streamingStarted}
             controlsLocked={controlsLocked}
-            isProcessingFiles={processingFiles.size > 0}
+            isProcessingFiles={processingFiles.size > 0 || processingUrls.size > 0}
           />
         </div>
       </div>

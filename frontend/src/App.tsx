@@ -20,7 +20,7 @@ function App() {
   ])
 
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([])
-  const [uploadedUrls, setUploadedUrls] = useState<string[]>([])
+  const [uploadedUrls, setUploadedUrls] = useState<Array<{ url: string; urlHash: string; name: string }>>([])
   const [isGenerating, setIsGenerating] = useState(false)
   const [responseReady, setResponseReady] = useState(false)
   const [streamingStarted, setStreamingStarted] = useState(false)
@@ -28,6 +28,7 @@ function App() {
   const [sessions, setSessions] = useState<Session[]>([])
   const [currentSessionIndex, setCurrentSessionIndex] = useState(-1)
   const [processingFiles, setProcessingFiles] = useState<Set<string>>(new Set())
+  const [processingUrls, setProcessingUrls] = useState<Set<string>>(new Set())
   const currentMessageIdRef = useRef<string | null>(null)
   const activeGenerationIdRef = useRef<number | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -134,37 +135,56 @@ function App() {
             console.error("Error fetching history for sources check:", error)
           })
         const fetchSourcesForSession = async (sessionId: string) => {
-          fetch(`${API_URL}/sources`, {
-            method: 'GET',
-            headers: {
-              'Session-ID': sessionId,
-            },
-          })
-            .then((response) => response.json())
-            .then((data) => {
-              console.log("Fetched sources for session:", currentSessionIndex, data)
-              // populate uploadedFiles and uploadedUrls based on data
-              const files: File[] = []
-              const urls: string[] = []
-              data.files.forEach((fileInfo: { name: string; extension: string }) => {
-                if (['pdf', 'txt', 'docx'].includes(fileInfo.extension)) {
-                  // create a dummy File object since we can't get the original file
-                  const dummyFile = new File([""], fileInfo.name, { type: "application/octet-stream" })
-                  files.push(dummyFile)
-                } else if (['png', 'jpg', 'jpeg', 'gif', 'bmp'].includes(fileInfo.extension)) {
-                  const dummyFile = new File([""], fileInfo.name, { type: "image/" + fileInfo.extension })
-                  files.push(dummyFile)
-                } else {
-                  // treat as URL
-                  urls.push(fileInfo.name)
-                }
+          try {
+            // Fetch both regular files and URLs
+            const [sourcesResponse, urlsResponse] = await Promise.all([
+              fetch(`${API_URL}/sources`, {
+                method: 'GET',
+                headers: {
+                  'Session-ID': sessionId,
+                },
+              }),
+              fetch(`${API_URL}/urls`, {
+                method: 'GET',
+                headers: {
+                  'Session-ID': sessionId,
+                },
               })
-              setUploadedFiles(files)
-              setUploadedUrls(urls)
+            ])
+            
+            const sourcesData = await sourcesResponse.json()
+            const urlsData = await urlsResponse.json()
+            
+            console.log("Fetched sources for session:", currentSessionIndex, sourcesData)
+            console.log("Fetched URLs for session:", currentSessionIndex, urlsData)
+            
+            // Populate uploadedFiles and uploadedUrls based on data
+            const files: File[] = []
+            const urls: Array<{ url: string; urlHash: string; name: string }> = []
+            
+            sourcesData.files.forEach((fileInfo: { name: string; extension: string }) => {
+              if (['pdf', 'txt', 'docx'].includes(fileInfo.extension)) {
+                // create a dummy File object since we can't get the original file
+                const dummyFile = new File([""], fileInfo.name, { type: "application/octet-stream" })
+                files.push(dummyFile)
+              } else if (['png', 'jpg', 'jpeg', 'gif', 'bmp'].includes(fileInfo.extension)) {
+                const dummyFile = new File([""], fileInfo.name, { type: "image/" + fileInfo.extension })
+                files.push(dummyFile)
+              }
             })
-            .catch((error) => {
-              console.error("Error fetching sources:", error)
-            })
+            
+            // Add URLs from the URLs endpoint
+            if (urlsData.urls) {
+              urlsData.urls.forEach((urlInfo: { url: string; urlHash: string; name: string }) => {
+                urls.push(urlInfo)
+              })
+            }
+            
+            setUploadedFiles(files)
+            setUploadedUrls(urls)
+          } catch (error) {
+            console.error("Error fetching sources:", error)
+          }
         }
       }
     } else {
@@ -188,9 +208,9 @@ function App() {
   }, [sessions])
 
   const handleSendMessage = async (content: string) => {
-    // Prevent sending message if files are still being processed
-    if (processingFiles.size > 0) {
-      alert("Please wait for all files to finish processing before sending a message.")
+    // Prevent sending message if files or URLs are still being processed
+    if (processingFiles.size > 0 || processingUrls.size > 0) {
+      alert("Please wait for all files and URLs to finish processing before sending a message.")
       return
     }
 
@@ -217,9 +237,18 @@ function App() {
     const selectedUrls = uploadedUrls.filter((_, urlIndex) => {
       const isSelected = selectedUrlsRef.current.has(urlIndex)
       if (!isSelected) {
-        console.log(`Skipping deselected URL: ${uploadedUrls[urlIndex]}`)
+        console.log(`Skipping deselected URL: ${uploadedUrls[urlIndex].url}`)
       }
       return isSelected
+    })
+    
+    // Add URL sources to file metadata for backend
+    selectedUrls.forEach((urlObj) => {
+      fileMetadata.push({
+        name: urlObj.name,  // e.g., "02e91ca90a02.web"
+        type: 'url',
+        size: 0,
+      })
     })
 
     // Add user message with file/URL metadata
@@ -230,7 +259,7 @@ function App() {
       sources: [],
       timestamp: new Date(),
       fileMetadata: fileMetadata.length > 0 ? fileMetadata : undefined,
-      urls: selectedUrls.length > 0 ? selectedUrls : undefined,
+      urls: selectedUrls.length > 0 ? selectedUrls.map(u => u.url) : undefined,
       originalInput: content,
     }
     // Store metadata in ref to preserve when history is refetched
@@ -335,7 +364,7 @@ function App() {
       id: (Date.now() + 1).toString(),
       role: "assistant",
       content: reply,
-      sources: data?.sources || uploadedFiles.map((f) => f.name).concat(uploadedUrls),
+      sources: data?.sources || uploadedFiles.map((f) => f.name).concat(uploadedUrls.map(u => u.url)),
       timestamp: new Date(),
       isStreaming: true,
     }
@@ -400,8 +429,64 @@ function App() {
     }
   }
 
-  const handleUrlAdded = (url: string) => {
-    setUploadedUrls((prev) => [...prev, url])
+  const handleUrlAdded = async (url: string) => {
+    try {
+      console.log('Adding URL:', url)
+      
+      // Add to processing set
+      setProcessingUrls((prev) => new Set([...prev, url]))
+      
+      // If no session exists, backend will create one automatically
+      let sessionId = sessions[currentSessionIndex]?.id || ""
+      
+      const response = await fetch(`${API_URL}/urls`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Session-ID': sessionId,
+        },
+        body: JSON.stringify({ url }),
+      })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        console.error('Failed to add URL:', error)
+        alert(`Failed to add URL: ${error.error || 'Unknown error'}`)
+        return
+      }
+      
+      const data = await response.json()
+      console.log('URL added successfully:', data)
+      
+      // If a new session was created by the backend, add it to our session list
+      if (data.sessionId && currentSessionIndex === -1) {
+        const newSessionName = url.slice(0, 20) + (url.length > 20 ? "..." : "")
+        const newSession: Session = { id: data.sessionId, name: newSessionName }
+        setCurrentSessionIndex(sessions.length)
+        setSessions((prev) => [...prev, newSession])
+        console.log("Created new session from URL:", data.sessionId, newSessionName)
+      }
+      
+      // Store URL object with hash
+      setUploadedUrls((prev) => [...prev, { url: data.url, urlHash: data.urlHash, name: data.name }])
+      
+      // Remove from processing set
+      setProcessingUrls((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(url)
+        return newSet
+      })
+    } catch (error) {
+      console.error('Error adding URL:', error)
+      alert('Failed to add URL. Please try again.')
+      
+      // Remove from processing set on error
+      setProcessingUrls((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(url)
+        return newSet
+      })
+    }
   }
 
   const handleRemoveFile = async (index: number) => {
@@ -416,8 +501,23 @@ function App() {
     })
   }
 
-  const handleRemoveUrl = (index: number) => {
-    setUploadedUrls((prev) => prev.filter((_, i) => i !== index))
+  const handleRemoveUrl = async (index: number) => {
+    try {
+      const urlObj = uploadedUrls[index]
+      console.log('Removing URL:', urlObj.url)
+      
+      await fetch(`${API_URL}/urls?urlHash=${urlObj.urlHash}`, {
+        method: 'DELETE',
+        headers: {
+          'Session-ID': sessions[currentSessionIndex]?.id || "",
+        },
+      })
+      
+      setUploadedUrls((prev) => prev.filter((_, i) => i !== index))
+    } catch (error) {
+      console.error('Error removing URL:', error)
+      setUploadedUrls((prev) => prev.filter((_, i) => i !== index))
+    }
   }
 
   const handleStreamingComplete = (messageId: string) => {
@@ -528,6 +628,7 @@ function App() {
       streamingStarted={streamingStarted}
       controlsLocked={controlsLocked}
       processingFiles={processingFiles}
+      processingUrls={processingUrls}
       sessions={sessions}
       currentSessionIndex={currentSessionIndex}
       setSessions={setSessions}
