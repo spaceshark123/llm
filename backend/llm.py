@@ -20,7 +20,7 @@ if not GROQ_API_KEY:
 TEMPERATURE = float(os.getenv("TEMPERATURE", "0.7"))
 MODEL_NAME = os.getenv("MODEL_NAME", "llama-3.1-8b-instant")
 SYSTEM_PROMPT = """You are a helpful and knowledgeable AI assistant. Respond in markdown."""
-CHROMA_PATH = "chroma"
+CHROMA_PATH = os.getenv("CHROMA_PATH", "chroma")
 
 # Session store (for conversation histories)
 store = {}

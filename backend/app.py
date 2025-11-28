@@ -48,15 +48,15 @@ def initialize_easyocr():
 
 # Initialize on startup
 initialize_easyocr()
+load_dotenv()
 
-DATA_PATH = 'data'
-TEMP_PATH = 'temp'
+DATA_PATH = os.getenv('DATA_PATH', 'data')
+TEMP_PATH = os.getenv('TEMP_PATH', 'temp')
 # clear and recreate data folder
 if os.path.exists(DATA_PATH):
 	shutil.rmtree(DATA_PATH)
 os.makedirs(DATA_PATH)
 
-load_dotenv()
 PORT = int(os.getenv('BACKEND_PORT', 5050))
 
 app = Flask(__name__)

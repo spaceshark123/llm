@@ -43,3 +43,5 @@ venv.bak/
 data/
 *.db
 *.sqlite3
+temp/
+chroma/
