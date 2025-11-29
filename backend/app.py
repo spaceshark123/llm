@@ -4,8 +4,6 @@ from flask_cors import CORS
 import os
 import json
 import io
-import numpy as np
-from PIL import Image
 import requests
 from urllib.parse import urlparse, quote
 import hashlib
@@ -15,44 +13,8 @@ from dotenv import load_dotenv
 from history import ChatMessageHistoryWithTimestamps
 from chroma import add_single_document, rebuild_database, remove_documents_by_source
 from embeddings import embeddings
+from extractors import extract_document, extract_url as extract_url_from_module
 
-try:
-	import pypdf
-	PDF_AVAILABLE = True
-except ImportError:
-	PDF_AVAILABLE = False
-	print("Warning: pypdf not installed. PDF processing will be limited.")
- 
- # Check for docx availability
-try:
-	import docx
-	DOCX_AVAILABLE = True
-except ImportError:
-	DOCX_AVAILABLE = False
-
-# Initialize EasyOCR reader globally
-ocr_reader = None
-EASYOCR_AVAILABLE = False
-
-def initialize_easyocr():
-	"""Initialize EasyOCR reader with error handling."""
-	global ocr_reader, EASYOCR_AVAILABLE
-	try:
-		import easyocr
-		ocr_reader = easyocr.Reader(['en'], gpu=False)
-		EASYOCR_AVAILABLE = True
-		print("EasyOCR initialized successfully")
-	except ImportError:
-		EASYOCR_AVAILABLE = False
-		ocr_reader = None
-		print("Warning: easyocr not installed. Image OCR will be limited.")
-	except Exception as e:
-		EASYOCR_AVAILABLE = False
-		ocr_reader = None
-		print(f"Warning: easyocr initialization failed: {e}")
-
-# Initialize on startup
-initialize_easyocr()
 load_dotenv()
 
 DATA_PATH = os.getenv('DATA_PATH', 'data')
@@ -73,292 +35,20 @@ app.config['CORS_SUPPORTS_CREDENTIALS'] = True
 
 CORS(app)
 
-def extract_image_text(image_file):
-	"""Extract text from image file using EasyOCR."""
-	if not EASYOCR_AVAILABLE or ocr_reader is None:
-		return f"[Image OCR unavailable - easyocr not installed]"
-	
-	try:
-		# Read image file into memory
-		image_data = image_file.read()
-		image_file.seek(0)
-		
-		# Convert bytes to PIL Image
-		image = Image.open(io.BytesIO(image_data))
-		
-		# Convert to RGB if necessary (handles RGBA, grayscale, etc.)
-		if image.mode != 'RGB':
-			image = image.convert('RGB')
-		
-		# Convert to numpy array for easyocr
-		image_array = np.array(image)
-		
-		# Run OCR with confidence threshold
-		ocr_result = ocr_reader.readtext(image_array, detail=1)
-		
-		# Extract text from results (ocr_result is list of tuples: (bbox, text, confidence))
-		if not ocr_result:
-			return f"[Image File: {image_file.filename}]\nNo text detected in image."
-		
-		# Extract text with confidence filtering
-		text_lines = [item[1] for item in ocr_result if item[2] > 0.3]  # confidence > 0.3
-		text = '\n'.join(text_lines)
-		
-		if not text.strip():
-			return f"[Image File: {image_file.filename}]\nNo text detected in image."
-		
-		return text
-	except Exception as e:
-		print(f"Image OCR Error for {image_file.filename}: {str(e)}")
-		return f"[Image OCR Error: {str(e)}]"
-
-def extract_pdf_text(pdf_file):
-	"""Extract text from PDF file using pypdf and EasyOCR fallback."""
-	if not PDF_AVAILABLE:
-		return f"[PDF processing unavailable - pypdf not installed]"
-	
-	try:
-		# Save file position to restore later
-		original_pos = pdf_file.stream.tell() if hasattr(pdf_file, 'stream') else 0
-		
-		pdf_reader = pypdf.PdfReader(pdf_file)
-		text = ""
-		
-		for page_num, page in enumerate(pdf_reader.pages):
-			try:
-				# Try text extraction first
-				page_text = page.extract_text()
-				
-				if page_text and page_text.strip():
-					text += f"\n--- Page {page_num + 1} ---\n"
-					text += page_text
-				else:
-					# If no text extracted, try EasyOCR fallback on the page
-					if EASYOCR_AVAILABLE and ocr_reader is not None:
-						text += f"\n--- Page {page_num + 1} (OCR) ---\n"
-						try:
-							# Try to render PDF page to image for OCR
-							try:
-								import fitz  # pymupdf
-								pdf_file.seek(0)
-								doc = fitz.open(stream=pdf_file.read(), filetype="pdf")
-								page_image = doc[page_num].get_pixmap(matrix=fitz.Matrix(2, 2))
-								
-								# Convert pixmap to numpy array
-								image_data = page_image.tobytes("ppm")
-								image = Image.open(io.BytesIO(image_data))
-								image_array = np.array(image)
-								
-								# Run OCR on the page image
-								ocr_result = ocr_reader.readtext(image_array, detail=1)
-								ocr_text = '\n'.join([item[1] for item in ocr_result if item[2] > 0.3])
-								text += ocr_text if ocr_text.strip() else "[No text detected on page]\n"
-								doc.close()
-							except ImportError:
-								text += "[pymupdf not installed - cannot OCR scanned PDF pages]\n"
-						except Exception as ocr_error:
-							text += f"[OCR failed for page {page_num + 1}: {str(ocr_error)}]\n"
-					else:
-						text += f"[No text on page {page_num + 1}]\n"
-			except Exception as e:
-				text += f"[Failed to extract page {page_num + 1}: {str(e)}]\n"
-		
-		return text if text.strip() else "[PDF file had no extractable text]"
-	except Exception as e:
-		print(f"PDF processing error: {str(e)}")
-		return f"[Failed to process PDF: {str(e)}]"
-
-def extract_docx_text(doc_file):
-	"""Extract text from DOCX/DOC file."""
-	if not DOCX_AVAILABLE:
-		return f"[DOCX processing unavailable - python-docx not installed]"
-	
-	try:
-		# Get filename
-		filename = getattr(doc_file, 'filename', 'document')
-		file_extension = filename.lower().split('.')[-1] if '.' in filename else ''
-		
-		# Handle old .doc format (binary)
-		if file_extension == 'doc':
-			return handle_old_doc_format(doc_file, filename)
-		
-		# Handle .docx format (modern XML-based)
-		# Read file into memory
-		file_data = doc_file.read()
-		doc_file.seek(0)  # Reset file position
-		
-		# Load document from bytes
-		doc = docx.Document(io.BytesIO(file_data))
-		
-		# Extract all text from paragraphs
-		text_parts = []
-		
-		# Extract paragraphs
-		for paragraph in doc.paragraphs:
-			if paragraph.text.strip():
-				text_parts.append(paragraph.text)
-		
-		# Extract text from tables
-		for table in doc.tables:
-			for row in table.rows:
-				row_text = []
-				for cell in row.cells:
-					if cell.text.strip():
-						row_text.append(cell.text.strip())
-				if row_text:
-					text_parts.append(' | '.join(row_text))
-		
-		# Extract text from headers and footers
-		for section in doc.sections:
-			# Header
-			if section.header:
-				for paragraph in section.header.paragraphs:
-					if paragraph.text.strip():
-						text_parts.append(f"[Header: {paragraph.text}]")
-			
-			# Footer
-			if section.footer:
-				for paragraph in section.footer.paragraphs:
-					if paragraph.text.strip():
-						text_parts.append(f"[Footer: {paragraph.text}]")
-		
-		# Combine all text
-		text = '\n'.join(text_parts)
-		
-		if not text.strip():
-			return f"[Document File: {filename}]\nNo text detected in document."
-		
-		return text
-		
-	except Exception as e:
-		print(f"DOCX processing error for {filename}: {str(e)}")
-		return f"[Failed to process document: {str(e)}]"
-
-
-def handle_old_doc_format(doc_file, filename):
-	"""Handle old .doc format (binary/OLE format)."""
-	# Old .doc files are complex binary format
-	# Best approach: inform user to convert to .docx or use OCR on PDF export
-	
-	return f"[Old .doc format detected for {filename}. Please convert to .docx or PDF for better text extraction.]"
-
-
-def extract_url_text(url: str) -> str:
-	"""Extract text from a URL by taking a screenshot and running OCR."""
-	print(f"Extracting text from URL: {url}")
-	
-	# Try Selenium + OCR first (best quality for visual content)
-	screenshot_image = None
-	try:
-		from selenium import webdriver
-		from selenium.webdriver.chrome.options import Options
-		
-		print("Attempting Selenium screenshot...")
-		# Setup Chrome options
-		chrome_options = Options()
-		chrome_options.add_argument('--headless')
-		chrome_options.add_argument('--no-sandbox')
-		chrome_options.add_argument('--disable-dev-shm-usage')
-		chrome_options.add_argument('--disable-gpu')
-		chrome_options.add_argument('--window-size=1920,1080')
-		
-		# Create driver
-		driver = webdriver.Chrome(options=chrome_options)
-		driver.get(url)
-		
-		# Wait for page to load
-		import time
-		time.sleep(3)  # Give page time to render
-		
-		# Take screenshot
-		screenshot_bytes = driver.get_screenshot_as_png()
-		driver.quit()
-		
-		# Convert to PIL Image
-		screenshot_image = Image.open(io.BytesIO(screenshot_bytes))
-		print("Screenshot captured successfully")
-		
-	except ImportError:
-		print("Selenium not available - will try BeautifulSoup fallback")
-	except Exception as selenium_error:
-		print(f"Selenium screenshot failed: {selenium_error}")
-	
-	# If we have a screenshot and OCR is available, use it
-	if screenshot_image and EASYOCR_AVAILABLE and ocr_reader is not None:
-		print("Running OCR on screenshot...")
-		try:
-			# Convert to RGB if necessary
-			if screenshot_image.mode != 'RGB':
-				screenshot_image = screenshot_image.convert('RGB')
-			
-			# Convert to numpy array for easyocr
-			image_array = np.array(screenshot_image)
-			
-			# Run OCR
-			ocr_result = ocr_reader.readtext(image_array, detail=1)
-			
-			if ocr_result:
-				# Extract text with confidence filtering
-				text_lines = [item[1] for item in ocr_result if item[2] > 0.3]
-				text = '\n'.join(text_lines)
-				
-				if text.strip():
-					print(f"OCR extracted {len(text_lines)} lines of text")
-					return f"[Website Content from {url}]\n(Extracted via Screenshot OCR)\n\n{text}"
-			
-			print("OCR found no text in screenshot")
-		except Exception as ocr_error:
-			print(f"OCR processing failed: {ocr_error}")
-	
-	# Fallback: Try BeautifulSoup HTML parsing
-	print("Attempting BeautifulSoup text extraction...")
-	try:
-		from bs4 import BeautifulSoup
-		response = requests.get(url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
-		response.raise_for_status()
-		
-		soup = BeautifulSoup(response.content, 'html.parser')
-		
-		# Remove script and style elements
-		for script in soup(["script", "style"]):
-			script.decompose()
-		
-		# Get text
-		text = soup.get_text(separator='\n')
-		
-		# Clean up whitespace
-		lines = (line.strip() for line in text.splitlines())
-		chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-		text = '\n'.join(chunk for chunk in chunks if chunk)
-		
-		if text.strip():
-			print(f"BeautifulSoup extracted text successfully")
-			return f"[Website Content from {url}]\n(Extracted via HTML parsing)\n\n{text}"
-		else:
-			return f"[Website: {url}]\nNo text content extracted."
-			
-	except ImportError:
-		return f"[Website: {url}]\nText extraction requires BeautifulSoup (bs4) to be installed."
-	except Exception as bs_error:
-		print(f"BeautifulSoup extraction failed: {bs_error}")
-		return f"[Error fetching URL: {url}]\n{str(bs_error)}"
-
 def extract_document_text(doc_file):
 	"""
 	Unified function to extract text from various document formats.
-	Automatically detects format based on file extension.
+	Delegates to the extractors module which handles all format detection and extraction.
 	"""
-	filename = getattr(doc_file, 'filename', 'document')
-	file_extension = filename.lower().split('.')[-1] if '.' in filename else ''
-	
-	if file_extension in ['docx', 'doc']:
-		return extract_docx_text(doc_file)
-	elif file_extension == 'pdf':
-		return extract_pdf_text(doc_file)
-	elif file_extension in ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff']:
-		return extract_image_text(doc_file)
-	else:
-		return f"[Unsupported file format: {file_extension}]"
+	return extract_document(doc_file)
+
+
+def extract_url_text(url: str) -> str:
+	"""
+	Extract text from URL.
+	Delegates to the extractors module which handles both Selenium + OCR and BeautifulSoup fallback.
+	"""
+	return extract_url_from_module(url)
 
 @app.route('/')
 def home():
