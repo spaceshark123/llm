@@ -25,6 +25,7 @@ export function ChatInput({ onSendMessage, onFilesAdded, onUrlAdded, isGeneratin
   const [isDragOverInput, setIsDragOverInput] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [urlModalOpen, setUrlModalOpen] = useState(false)
 
   const handleSend = () => {
     // Trim leading/trailing whitespace but preserve internal newlines
@@ -77,6 +78,7 @@ export function ChatInput({ onSendMessage, onFilesAdded, onUrlAdded, isGeneratin
     if (urlInput.trim()) {
       try {
         new URL(urlInput.trim())
+        setUrlModalOpen(false)
         onUrlAdded(urlInput.trim())
         setUrlInput("")
       } catch {
@@ -150,7 +152,7 @@ export function ChatInput({ onSendMessage, onFilesAdded, onUrlAdded, isGeneratin
           </Dialog>
 
           {/* URL input */}
-          <Dialog>
+          <Dialog open={urlModalOpen} onOpenChange={setUrlModalOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" size="icon" title="Add URL" className="cursor-pointer">
                 <LinkIcon className="h-4 w-4" />

@@ -432,6 +432,15 @@ function App() {
   const handleUrlAdded = async (url: string) => {
     try {
       console.log('Adding URL:', url)
+
+      if(uploadedUrls.find(u => u.url === url)) {
+        // URL already exists, no need to add
+        console.error('URL has already been added:', url)
+        return
+      }
+
+      // Store URL object with hash
+      setUploadedUrls((prev) => [...prev, { url: url, urlHash: '', name: url.split('/').pop() || url }])
       
       // Add to processing set
       setProcessingUrls((prev) => new Set([...prev, url]))
@@ -466,9 +475,13 @@ function App() {
         setSessions((prev) => [...prev, newSession])
         console.log("Created new session from URL:", data.sessionId, newSessionName)
       }
-      
-      // Store URL object with hash
-      setUploadedUrls((prev) => [...prev, { url: data.url, urlHash: data.urlHash, name: data.name }])
+
+      // Update the URL entry with its hash returned from backend
+      setUploadedUrls((prev) =>
+        prev.map((u) =>
+          u.url === url ? { ...u, urlHash: data.urlHash || '', name: data.name || u.name } : u
+        )
+      )
       
       // Remove from processing set
       setProcessingUrls((prev) => {
