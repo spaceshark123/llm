@@ -469,6 +469,14 @@ function App() {
       if (!response.ok) {
         const error = await response.json()
         console.error('Failed to add URL:', error)
+        // Remove from processing set
+        setProcessingUrls((prev) => {
+          const newSet = new Set(prev)
+          newSet.delete(url)
+          return newSet
+        })
+        // Remove the URL from uploadedUrls since it failed
+        setUploadedUrls((prev) => prev.filter((u) => u.url !== url))
         alert(`Failed to add URL: ${error.error || 'Unknown error'}`)
         return
       }
@@ -508,6 +516,9 @@ function App() {
         newSet.delete(url)
         return newSet
       })
+
+      // Remove the URL from uploadedUrls since it failed
+      setUploadedUrls((prev) => prev.filter((u) => u.url !== url))
     }
   }
 
