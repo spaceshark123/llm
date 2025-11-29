@@ -361,18 +361,6 @@ def history_endpoint():
 			return jsonify({'message': 'Session folder not found, but history and database cleared'}), 200
 	
 	if request.method == 'GET':
-		'''
-		export interface ChatMessage {
-  id: string
-  role: "user" | "assistant"
-  content: string
-  sources: string[]
-  timestamp: Date
-  isStreaming?: boolean
-  truncatedContent?: string
-}
-
-		'''
 		session_history = get_session_history(session_id)
 		history = session_history.get_messages_with_timestamps()
 		print("Fetched history for session:", session_id, history)
@@ -387,10 +375,49 @@ def history_endpoint():
 				'isStreaming': False,
 				'truncatedContent': msg.content,
 				'fileMetadata': session_history.get_message_metadata(index).get('fileMetadata'),
-				'urls': session_history.get_message_metadata(index).get('urls'),
+				'urls': session_history.get_message_metadata(index).get('urls', []),
 			}
 			for (index, (msg, timestamp)) in enumerate(history)
 		]
+		for item in history_serialized:
+			# for each fileMetadata item with .web, that file came from a URL, and the first line is the original URL, which we can extract
+			if item['fileMetadata']:
+				urls = []
+				for file_meta in item['fileMetadata']:
+					if '.web' in file_meta['name']:
+						# read first line of the file to get original URL
+						try:
+							with open(file_meta['name'], 'r', encoding='utf-8') as f:
+								first_line = f.readline().strip()
+								if first_line.startswith('URL: '):
+									original_url = first_line[5:]  # Remove 'URL: ' prefix
+									urls.append(original_url)
+						except Exception as e:
+							print(f"Error reading URL from file {file_meta['name']}: {e}")
+							continue
+				item['urls'] = urls
+			# do same for 'sources' field, but replace the original source instead of setting a separate 'urls' field
+			if item['sources']:
+				updated_sources = []
+				for source in item['sources']:
+					if '.web' in source:
+						# read first line of the file to get original URL
+						session_folder = os.path.join(DATA_PATH, session_id)
+						file_path = os.path.join(session_folder, source)
+						# add .md extension
+						file_path_md = file_path + '.md'
+						try:
+							with open(file_path_md, 'r', encoding='utf-8') as f:
+								first_line = f.readline().strip()
+								if first_line.startswith('URL: '):
+									original_url = first_line[5:]  # Remove 'URL: ' prefix
+									updated_sources.append(original_url)
+						except Exception as e:
+							print(f"Error reading URL from source file {source}: {e}")
+							continue
+					else:
+						updated_sources.append(source)
+				item['sources'] = updated_sources
 		return jsonify({'history': history_serialized}), 200
 
 if __name__ == '__main__':

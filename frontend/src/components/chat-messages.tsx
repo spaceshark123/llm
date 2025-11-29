@@ -142,11 +142,11 @@ export function ChatMessages({ messages, onStreamingComplete, onStreamingStart }
             )}
 
             {/* File metadata for user messages */}
-            {message.role === "user" && message.fileMetadata && message.fileMetadata.length > 0 && (
+            {message.role === "user" && message.fileMetadata && message.fileMetadata.filter((file) => !file.name.includes(".web")).length > 0 && (
               <div className="mt-3 pt-3 border-t border-border">
                 <p className="text-xs font-semibold text-muted-foreground mb-2">Files:</p>
                 <div className="space-y-1">
-                  {message.fileMetadata.map((file, idx) => (
+                  {message.fileMetadata.filter((file) => !file.name.includes(".web")).map((file, idx) => (
                     <div
                       key={idx}
                       className="inline-flex items-center gap-2 px-2 py-1 bg-muted rounded text-xs text-muted-foreground"
