@@ -132,7 +132,7 @@ ERROR_MESSAGES: Dict[str, str] = {
 
 # Supported file formats
 SUPPORTED_FORMATS: Dict[str, list] = {
-    'document': ['pdf', 'docx', 'doc'],
+    'document': ['pdf', 'docx', 'txt'],
     'image': ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff'],
 }
 

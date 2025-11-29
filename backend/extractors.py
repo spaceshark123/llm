@@ -18,6 +18,9 @@ from PIL import Image
 import numpy as np
 from urllib.parse import urlparse
 import logging
+from langchain_community.document_loaders import WebBaseLoader
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 
 # Optional imports with graceful degradation
 try:
@@ -71,9 +74,9 @@ def _initialize_global_ocr():
     
     try:
         _ocr_reader = easyocr.Reader(['en'], gpu=False)
-        logger.info("Global EasyOCR reader initialized successfully")
+        print("Global EasyOCR reader initialized successfully")
     except Exception as e:
-        logger.error(f"Failed to initialize EasyOCR: {e}")
+        print(f"Failed to initialize EasyOCR: {e}")
         _ocr_reader = None
 
 def _get_ocr_reader():
@@ -341,51 +344,152 @@ class DOCXExtractor(DocumentExtractor):
             return f"[Failed to process document: {str(e)}]"
 
 
-class URLExtractor(DocumentExtractor):
-    """Extracts text from URLs using screenshot + OCR or HTML parsing."""
+class URLExtractor:
+    """Intelligently extracts text from URLs using the best method."""
     
-    MIN_CONFIDENCE = 0.3
     TIMEOUT = 10
-    SELENIUM_WAIT = 3
+    MIN_CONTENT_LENGTH = 200  # Minimum chars to consider content "real"
+    JS_INDICATORS = [
+        # Meta frameworks
+        'react', 'vue', 'angular', 'next.js', 'nuxt',
+        # Common JS indicators in HTML
+        '__NEXT_DATA__', '__NUXT__', 'ng-app', 'data-react-root',
+        # Empty body indicators
+        'id="root"', 'id="app"', 'id="__next"'
+    ]
     
-    def can_extract(self, filename: str) -> bool:
-        """URLs are not file-based."""
-        return False
-    
-    def extract(self, url: str) -> str:
-        """Extract text from URL."""
-        logger.info(f"Extracting text from URL: {url}")
+    def extract(self, url: str) -> Tuple[str, str]:
+        """
+        Extract text from URL, automatically choosing the best method.
+        
+        Returns:
+            Tuple[str, str]: (extracted_text, method_used)
+        """
+        print(f"Processing URL: {url}")
         
         # Validate URL
+        if not self._is_valid_url(url):
+            return "[Invalid URL format]", "error"
+        
+        # Step 1: Quick static check
+        needs_js = self._needs_javascript_rendering(url)
+        
+        if not needs_js:
+            # Try static extraction first
+            text, success = self._extract_static(url)
+            if success:
+                print(f"Static extraction succeeded ({len(text)} chars)")
+                return text, "static"
+            else:
+                print("Static extraction failed, trying dynamic...")
+        else:
+            print("JS-heavy site detected, using dynamic extraction")
+        
+        # Step 2: Use Selenium if static failed or JS detected
+        text, success = self._extract_dynamic(url)
+        if success:
+            print(f"Dynamic extraction succeeded ({len(text)} chars)")
+            return text, "dynamic"
+        
+        return f"[Website: {url}]\nNo text content extracted.", "failed"
+    
+    def _is_valid_url(self, url: str) -> bool:
+        """Validate URL format."""
         try:
             parsed = urlparse(url)
-            if not parsed.scheme or not parsed.netloc:
-                return "[Invalid URL format]"
+            return bool(parsed.scheme and parsed.netloc)
         except Exception:
-            return "[Invalid URL format]"
-        
-        # Try Selenium + OCR first
-        screenshot_text = self._try_selenium_screenshot(url)
-        if screenshot_text:
-            return f"[Website Content from {url}]\n(Extracted via Screenshot OCR)\n\n{screenshot_text}"
-        
-        # Fallback to BeautifulSoup HTML parsing
-        html_text = self._try_beautifulsoup_parsing(url)
-        if html_text:
-            return f"[Website Content from {url}]\n(Extracted via HTML parsing)\n\n{html_text}"
-        
-        return f"[Website: {url}]\nNo text content extracted."
+            return False
     
-    def _try_selenium_screenshot(self, url: str) -> Optional[str]:
-        """Attempt to extract text via Selenium screenshot and OCR."""
-        ocr_reader = _get_ocr_reader()
-        if not SELENIUM_AVAILABLE or not ocr_reader:
-            return None
-        
+    def _needs_javascript_rendering(self, url: str) -> bool:
+        """
+        Detect if a website likely needs JavaScript rendering.
+        Uses heuristics based on HTML structure and meta tags.
+        """
         try:
-            logger.info("Attempting Selenium screenshot...")
+            # Get HTML without executing JS
+            response = requests.get(
+                url,
+                timeout=self.TIMEOUT,
+                headers={'User-Agent': 'Mozilla/5.0'}
+            )
+            response.raise_for_status()
+            html = response.text.lower()
             
-            # Setup Chrome options
+            # Check 1: Look for JS framework indicators
+            for indicator in self.JS_INDICATORS:
+                if indicator.lower() in html:
+                    print(f"Found JS indicator: {indicator}")
+                    return True
+            
+            # Check 2: Parse and analyze content
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Remove script/style tags
+            for tag in soup(['script', 'style', 'noscript']):
+                tag.decompose()
+            
+            # Get visible text
+            body = soup.find('body')
+            if not body:
+                return True  # No body = likely JS-rendered
+            
+            text = body.get_text(strip=True)
+            
+            # Check 3: Too little content suggests JS rendering
+            if len(text) < self.MIN_CONTENT_LENGTH:
+                print(f"Minimal content detected ({len(text)} chars) - likely JS-rendered")
+                return True
+            
+            # Check 4: Check for empty divs with common SPA IDs
+            spa_roots = soup.find_all(id=['root', 'app', '__next'])
+            if spa_roots:
+                for root in spa_roots:
+                    # If root div is empty or nearly empty
+                    if not root.get_text(strip=True):
+                        print("Found empty SPA root div")
+                        return True
+            
+            print("Site appears to be static HTML")
+            return False
+            
+        except Exception as e:
+            logger.warning(f"Error detecting JS requirement: {e}")
+            # Default to static if detection fails
+            return False
+    
+    def _extract_static(self, url: str) -> Tuple[str, bool]:
+        """Extract text using BeautifulSoup (fast, static HTML)."""
+        try:
+            print("Attempting static extraction with WebBaseLoader...")
+            loader = WebBaseLoader(url)
+            loader.requests_kwargs = {'timeout': self.TIMEOUT}
+            docs = loader.load()
+            
+            if docs and docs[0].page_content:
+                content = docs[0].page_content.strip()
+                if len(content) >= self.MIN_CONTENT_LENGTH:
+                    formatted = f"[Website Content from {url}]\n(Static HTML)\n\n{content}"
+                    return formatted, True
+            
+            return "", False
+            
+        except Exception as e:
+            logger.warning(f"Static extraction failed: {e}")
+            return "", False
+    
+    def _extract_dynamic(self, url: str) -> Tuple[str, bool]:
+        """Extract text using Selenium + OCR (slow, handles JS)."""
+        try:
+            # Get OCR reader
+            ocr_reader = _get_ocr_reader()
+            if not ocr_reader:
+                print("OCR not available, trying basic Selenium text extraction")
+                return self._extract_selenium_text_only(url)
+            
+            print("Attempting Selenium + OCR extraction...")
+            
+            # Setup Chrome
             chrome_options = Options()
             chrome_options.add_argument('--headless')
             chrome_options.add_argument('--no-sandbox')
@@ -393,16 +497,23 @@ class URLExtractor(DocumentExtractor):
             chrome_options.add_argument('--disable-gpu')
             chrome_options.add_argument('--window-size=1920,1080')
             
-            # Create driver and get page
             driver = webdriver.Chrome(options=chrome_options)
             driver.get(url)
-            time.sleep(self.SELENIUM_WAIT)
+            time.sleep(3)  # Wait for JS to render
             
-            # Take screenshot
+            # Try to get text content first
+            body_text = driver.find_element("tag name", "body").text
+            
+            # If we got good text content, use that
+            if len(body_text.strip()) >= self.MIN_CONTENT_LENGTH:
+                driver.quit()
+                formatted = f"[Website Content from {url}]\n(Rendered with JavaScript)\n\n{body_text}"
+                return formatted, True
+            
+            # Otherwise, try OCR on screenshot
             screenshot_bytes = driver.get_screenshot_as_png()
             driver.quit()
             
-            # Convert to PIL Image and run OCR
             screenshot_image = Image.open(io.BytesIO(screenshot_bytes))
             if screenshot_image.mode != 'RGB':
                 screenshot_image = screenshot_image.convert('RGB')
@@ -411,60 +522,43 @@ class URLExtractor(DocumentExtractor):
             ocr_result = ocr_reader.readtext(image_array, detail=1)
             
             if ocr_result:
-                text_lines = [item[1] for item in ocr_result if item[2] > self.MIN_CONFIDENCE]
+                text_lines = [item[1] for item in ocr_result if item[2] > 0.3]
                 text = '\n'.join(text_lines)
-                
                 if text.strip():
-                    logger.info(f"OCR extracted {len(text_lines)} lines from screenshot")
-                    return text
+                    formatted = f"[Website Content from {url}]\n(OCR from Screenshot)\n\n{text}"
+                    return formatted, True
             
-            logger.warning("OCR found no text in screenshot")
-            return None
+            return "", False
             
         except Exception as e:
-            logger.warning(f"Selenium screenshot failed: {e}")
-            return None
+            logger.warning(f"Dynamic extraction failed: {e}")
+            return "", False
     
-    def _try_beautifulsoup_parsing(self, url: str) -> Optional[str]:
-        """Attempt to extract text via BeautifulSoup HTML parsing."""
-        if not BEAUTIFULSOUP_AVAILABLE:
-            logger.warning("BeautifulSoup not available - HTML parsing disabled")
-            return None
-        
+    def _extract_selenium_text_only(self, url: str) -> Tuple[str, bool]:
+        """Fallback: Use Selenium without OCR."""
         try:
-            logger.info("Attempting BeautifulSoup text extraction...")
+            print("Attempting Selenium text-only extraction...")
+            chrome_options = Options()
+            chrome_options.add_argument('--headless')
+            chrome_options.add_argument('--no-sandbox')
+            chrome_options.add_argument('--disable-dev-shm-usage')
             
-            response = requests.get(
-                url,
-                timeout=self.TIMEOUT,
-                headers={'User-Agent': 'Mozilla/5.0'}
-            )
-            response.raise_for_status()
+            driver = webdriver.Chrome(options=chrome_options)
+            driver.get(url)
+            time.sleep(3)
             
-            soup = BeautifulSoup(response.content, 'html.parser')
+            body_text = driver.find_element("tag name", "body").text
+            driver.quit()
             
-            # Remove script and style elements
-            for script in soup(["script", "style"]):
-                script.decompose()
+            if body_text.strip():
+                formatted = f"[Website Content from {url}]\n(Rendered with JavaScript)\n\n{body_text}"
+                return formatted, True
             
-            # Get text
-            text = soup.get_text(separator='\n')
-            
-            # Clean up whitespace
-            lines = (line.strip() for line in text.splitlines())
-            chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-            text = '\n'.join(chunk for chunk in chunks if chunk)
-            
-            if text.strip():
-                logger.info("BeautifulSoup extracted text successfully")
-                return text
-            
-            logger.warning("BeautifulSoup found no text")
-            return None
+            return "", False
             
         except Exception as e:
-            logger.warning(f"BeautifulSoup extraction failed: {e}")
-            return None
+            logger.warning(f"Selenium text extraction failed: {e}")
+            return "", False
 
 
 class DocumentExtractorFactory:
@@ -493,7 +587,7 @@ class DocumentExtractorFactory:
         # Find matching extractor
         for extractor in self._extractors:
             if extractor.can_extract(filename):
-                logger.info(f"Using {extractor.__class__.__name__} for {filename}")
+                print(f"Using {extractor.__class__.__name__} for {filename}")
                 return extractor.extract(file_obj)
         
         logger.warning(f"No extractor found for {filename}")

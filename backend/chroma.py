@@ -203,7 +203,7 @@ def split_text(documents: List[Document]) -> List[Document]:
 		add_start_index=True,
 	)
 	chunks = text_splitter.split_documents(documents)
-	logger.info(f"Split {len(documents)} documents into {len(chunks)} chunks.")
+	print(f"Split {len(documents)} documents into {len(chunks)} chunks.")
 	
 	if chunks:
 		document = chunks[0]
