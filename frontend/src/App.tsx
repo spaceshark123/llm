@@ -73,6 +73,18 @@ function App() {
             name = sourcesData.files[0].name.slice(0, 20)
           } else if (sourcesData.urls && sourcesData.urls.length > 0) {
             name = sourcesData.urls[0].slice(0, 20)
+          } else {
+            const urlsResponse = await fetch(`${API_URL}/urls`, {
+              method: 'GET',
+              headers: {
+                'Session-ID': session,
+              },
+            })
+            const urlsData = await urlsResponse.json()
+            console.log("Fetched URLs for session:", session, urlsData)
+            if (urlsData.urls && urlsData.urls.length > 0) {
+              name = urlsData.urls[0].url.slice(0, 20)
+            }
           }
         }
         return { id: session, name: name } as Session
@@ -126,10 +138,7 @@ function App() {
           },
         }).then((response) => response.json())
           .then((data) => {
-            // if history is empty, do not fetch sources
-            if (data.history && data.history.length > 0) {
               fetchSourcesForSession(sessionId)
-            }
           })
           .catch((error) => {
             console.error("Error fetching history for sources check:", error)
