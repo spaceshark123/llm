@@ -34,7 +34,7 @@ store = {}
 
 print(f"RAG Enabled: {RAG_ENABLED}")
 
-def retrieve_context(db: Chroma, query: str, top_k: int = RAG_TOP_K, selected_sources: list = None) -> tuple[str, list[dict]]:
+def retrieve_context(db: Chroma, query: str, top_k: int = RAG_TOP_K, selected_sources: list = None, source_name_mapping: dict = None) -> tuple[str, list[dict]]:
     """Retrieve relevant context from the vector store.
     
     Returns:
@@ -57,14 +57,17 @@ def retrieve_context(db: Chroma, query: str, top_k: int = RAG_TOP_K, selected_so
         sources = []
         
         for i, (doc, score) in enumerate(results, 1):
-            # Add document content
-            context_parts.append(f"[Document {i} - {doc.metadata.get('source', 'Unknown')}]\n{doc.page_content}\n")
-            
             # Extract source info
             source = doc.metadata.get('source', 'Unknown')
+            source_original = source
+            if source_name_mapping and source in source_name_mapping:
+                source = source_name_mapping[source]
+            # Add document content
+            context_parts.append(f"[Document {i} - {source}]\n{doc.page_content}\n")
+            
             sources.append({
-                'name': os.path.basename(source),
-                'path': source,
+                'name': os.path.basename(source_original),
+                'path': source_original,
                 'score': float(score)
             })
         
@@ -81,7 +84,7 @@ def get_session_history(session_id: str) -> ChatMessageHistoryWithTimestamps:
         store[session_id] = ChatMessageHistoryWithTimestamps()
     return store[session_id]
 
-def chat(input_str: str, session_id: str = "default", db: Chroma = None, selected_sources: list = None) -> str:
+def chat(input_str: str, session_id: str = "default", db: Chroma = None, selected_sources: list = None, source_name_mapping: dict = None) -> str:
     """Send a message and get a response with conversation history.
     
     Args:
@@ -103,7 +106,7 @@ def chat(input_str: str, session_id: str = "default", db: Chroma = None, selecte
         print(f"RAG: Processing selected sources: {selected_sources}")
         selected_sources_names = [s['name'] for s in selected_sources if 'name' in s]
         print(f"RAG: Filtered source names: {selected_sources_names}")
-        context, sources = retrieve_context(db=db, query=input_str, selected_sources=selected_sources_names)
+        context, sources = retrieve_context(db=db, query=input_str, selected_sources=selected_sources_names, source_name_mapping=source_name_mapping)
         if context:
             full_input = f"""Context from knowledge base:
                         {context}
@@ -112,7 +115,10 @@ def chat(input_str: str, session_id: str = "default", db: Chroma = None, selecte
 
                         User question: {input_str}
 
-                        Please answer the user's question using the provided context when relevant. When referencing context, refer to them as [X] where X is the source after the dash in the document title after all directory paths are stripped away and the .md extension is removed, but keep the extension right before the .md (example: data/session-0000/xxx.docx.md becomes xxx.docx)."""
+                        Please answer the user's question using the provided context when relevant. When referencing context, refer to them as [X] where:
+                        - For files, X is the source after the dash in the document title after all directory paths are stripped away and the .md extension is removed, but keep the extension right before the .md (example: data/session-0000/xxx.docx.md becomes xxx.docx).
+                        - For URLs, use a markdown link where X (the label) is the domain/subdomain name (example: https://example.com/some/page becomes example.com and https://sub.example.com/some/page becomes sub.example.com) and the url is the full URL.
+                        """
             rag_sources = sources
             print(f"Retrieved {len(sources)} relevant documents for RAG")
     

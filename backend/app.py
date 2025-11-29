@@ -111,8 +111,19 @@ def chat_endpoint():
 			print(f"Found: {source_path}")
 		else:
 			print(f"Missing: {source_path}")
-	
-	reply = chat(message, session_id=session_id, db=session_db, selected_sources=sources)
+
+	# for url sources, we need to map back to original url from .web.md files (found in first line of those files)
+	url_source_mapping = {}
+	for src in selected_sources:
+		if '.web' not in src['name']:
+			continue
+		web_md_path = os.path.join(DATA_PATH, session_id, f"{src['name']}.md")
+		if os.path.exists(web_md_path):
+			url = extract_url(web_md_path)
+			url_source_mapping[web_md_path] = url
+			print(f"Mapping source {web_md_path} to URL {url}")
+
+	reply = chat(message, session_id=session_id, db=session_db, selected_sources=sources, source_name_mapping=url_source_mapping)
 	return jsonify({'reply': reply})
 
 # upload/delete/get sources
@@ -386,15 +397,7 @@ def history_endpoint():
 				for file_meta in item['fileMetadata']:
 					if '.web' in file_meta['name']:
 						# read first line of the file to get original URL
-						try:
-							with open(file_meta['name'], 'r', encoding='utf-8') as f:
-								first_line = f.readline().strip()
-								if first_line.startswith('URL: '):
-									original_url = first_line[5:]  # Remove 'URL: ' prefix
-									urls.append(original_url)
-						except Exception as e:
-							print(f"Error reading URL from file {file_meta['name']}: {e}")
-							continue
+						urls.append(extract_url(file_meta['name']))
 				item['urls'] = urls
 			# do same for 'sources' field, but replace the original source instead of setting a separate 'urls' field
 			if item['sources']:
@@ -406,19 +409,25 @@ def history_endpoint():
 						file_path = os.path.join(session_folder, source)
 						# add .md extension
 						file_path_md = file_path + '.md'
-						try:
-							with open(file_path_md, 'r', encoding='utf-8') as f:
-								first_line = f.readline().strip()
-								if first_line.startswith('URL: '):
-									original_url = first_line[5:]  # Remove 'URL: ' prefix
-									updated_sources.append(original_url)
-						except Exception as e:
-							print(f"Error reading URL from source file {source}: {e}")
-							continue
+						updated_sources.append(extract_url(file_path_md))
 					else:
 						updated_sources.append(source)
 				item['sources'] = updated_sources
 		return jsonify({'history': history_serialized}), 200
+
+def extract_url(file_path: str) -> str:
+	"""
+	Extract URL from a .web.md file.
+	Assumes the first line of the file contains the URL in the format: "URL: <actual_url>"
+	"""
+	try:
+		with open(file_path, 'r', encoding='utf-8') as f:
+			first_line = f.readline().strip()
+			if first_line.startswith('URL: '):
+				return first_line[5:]  # Remove 'URL: ' prefix
+	except Exception as e:
+		print(f"Error extracting URL from {file_path}: {e}")
+	return ""
 
 if __name__ == '__main__':
 	app.run(port=PORT, debug=True)
