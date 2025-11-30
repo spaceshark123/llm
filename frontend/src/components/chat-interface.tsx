@@ -294,7 +294,7 @@ export function ChatInterface({
               <div className="px-2 pt-2 rounded bg-muted/30 border border-dashed border-border">
                 {sessions.length > 0 ? (
                   sessions.map((session, index) => (
-                    <div className={currentSessionIndex === index ? "rounded w-full flex flex-row align-middle items-center border border-border mb-2 bg-gray-700!" : "rounded w-full flex flex-row align-middle items-center mb-2 border-border border bg-muted"} key={session.id}>
+                    <div className={currentSessionIndex === index ? "rounded w-full flex flex-row align-middle items-center border border-border mb-2 dark:bg-gray-700! bg-gray-400!" : "rounded w-full flex flex-row align-middle items-center mb-2 border-border border bg-muted"} key={session.id}>
                       <Button
                         onClick={() => {
                           setCurrentSessionIndex(index)
