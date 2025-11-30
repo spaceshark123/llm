@@ -193,7 +193,14 @@ def chat(input_str: str, session_id: str = "default", db: Chroma = None, selecte
                 'name': source_name,
                 'score': score
             })
-        
+    # Remove duplicates while keeping the highest score
+    unique_sources = {}
+    for src in all_sources:
+        name = src['name']
+        score = src['score']
+        if name not in unique_sources or score > unique_sources[name]['score']:
+            unique_sources[name] = src
+    all_sources = list(unique_sources.values())
     if all_sources:
         ai_metadata['sources'] = all_sources
     
