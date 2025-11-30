@@ -170,8 +170,8 @@ export function ModelSelector({ onModelChange }: ModelSelectorProps) {
         title="Select LLM Model"
       >
         <span>Model:</span>
-        <span className="font-medium truncate max-w-[80px]">
-          {currentModel ? currentModel.split("-")[0] : "Unknown"}
+        <span className="font-medium truncate max-w-[140px]">
+          {currentModel ? currentModel : "Unknown"}
         </span>
         <ChevronDown className="h-3 w-3 shrink-0" />
       </Button>
@@ -188,7 +188,7 @@ export function ModelSelector({ onModelChange }: ModelSelectorProps) {
                     key={model}
                     onClick={() => handleModelChange(model)}
                     disabled={isLoading}
-                    className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
+                    className={`w-full text-left px-3 py-2 rounded cursor-pointer text-sm transition-colors ${
                       currentModel === model
                         ? "bg-primary text-primary-foreground"
                         : "hover:bg-accent text-foreground disabled:opacity-50"
@@ -226,7 +226,7 @@ export function ModelSelector({ onModelChange }: ModelSelectorProps) {
                       <button
                         key={suggestion}
                         onClick={() => selectSuggestion(suggestion)}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-accent text-foreground first:rounded-t last:rounded-b transition-colors"
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-accent cursor-pointer text-foreground first:rounded-t last:rounded-b transition-colors"
                       >
                         {suggestion}
                       </button>
@@ -237,7 +237,7 @@ export function ModelSelector({ onModelChange }: ModelSelectorProps) {
                 <button
                   onClick={handleAddModel}
                   disabled={isAddingModel || !newModelInput.trim() || !validModels.includes(newModelInput.trim())}
-                  className="w-full px-3 py-2 rounded text-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="w-full px-3 py-2 rounded text-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed enabled:cursor-pointer transition-colors"
                   title={!validModels.includes(newModelInput.trim()) && newModelInput.trim() ? "Model is not in the valid Groq models list" : ""}
                 >
                   {isAddingModel ? "Adding..." : "Add Model"}
