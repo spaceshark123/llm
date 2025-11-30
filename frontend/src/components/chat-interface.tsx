@@ -284,6 +284,9 @@ export function ChatInterface({
                         onClick={() => {
                           setCurrentSessionIndex(index)
                         }}
+                        onDoubleClick={() => {
+                          openRenameDialog(session)
+                        }}
                         variant="outline"
                         size="sm"
                         className="text-left w-[75%] max-w-[75%] overflow-x-clip justify-start bg-transparent! border-none! cursor-pointer inline"
