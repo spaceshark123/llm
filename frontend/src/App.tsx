@@ -37,6 +37,7 @@ function App() {
   const selectedFilesRef = useRef<Set<number>>(new Set())
   const selectedUrlsRef = useRef<Set<number>>(new Set())
   const messagesMetadataRef = useRef<Map<string, { fileMetadata?: any; urls?: string[] }>>(new Map())
+  const newlyCreatedSessionsRef = useRef<Set<string>>(new Set())
 
   const fetchSessions = async () => {
     try {
@@ -106,30 +107,35 @@ function App() {
     if (currentSessionIndex !== -1) {
       const sessionId = sessions[currentSessionIndex]?.id
       if (sessionId) {
-        fetch(`${API_URL}/history`, {
-          method: 'GET',
-          headers: {
-            'Session-ID': sessionId,
-          },
-        })
-          .then((response) => response.json())
-          .then((data) => {
-            console.log("Fetched history for session:", currentSessionIndex, data)
-            if (data.history) {
-              // Restore fileMetadata and urls from ref for user messages
-              const messagesWithMetadata = data.history.map((msg: ChatMessage) => {
-                const metadata = messagesMetadataRef.current.get(msg.id)
-                if (metadata) {
-                  return { ...msg, ...metadata }
-                }
-                return msg
-              })
-              setMessages(messagesWithMetadata)
-            }
+        // Check if this is a newly created session - if so, don't fetch history
+        const isNewSession = newlyCreatedSessionsRef.current.has(sessionId)
+        
+        if (!isNewSession) {
+          fetch(`${API_URL}/history`, {
+            method: 'GET',
+            headers: {
+              'Session-ID': sessionId,
+            },
           })
-          .catch((error) => {
-            console.error("Error fetching history:", error)
-          })
+            .then((response) => response.json())
+            .then((data) => {
+              console.log("Fetched history for session:", currentSessionIndex, data)
+              if (data.history) {
+                // Restore fileMetadata and urls from ref for user messages
+                const messagesWithMetadata = data.history.map((msg: ChatMessage) => {
+                  const metadata = messagesMetadataRef.current.get(msg.id)
+                  if (metadata) {
+                    return { ...msg, ...metadata }
+                  }
+                  return msg
+                })
+                setMessages(messagesWithMetadata)
+              }
+            })
+            .catch((error) => {
+              console.error("Error fetching history:", error)
+            })
+        }
         // fetch sources if this is switching to an existing session, not a new one
         fetch(`${API_URL}/history`, {
           method: 'GET',
@@ -137,7 +143,7 @@ function App() {
             'Session-ID': sessionId,
           },
         }).then((response) => response.json())
-          .then((data) => {
+          .then(() => {
               fetchSourcesForSession(sessionId)
           })
           .catch((error) => {
@@ -380,6 +386,12 @@ function App() {
     currentMessageIdRef.current = aiMessage.id
     setMessages((prev) => [...prev, aiMessage])
     setResponseReady(true)
+    
+    // Mark session as no longer new after first message is received
+    if (sessionId && newlyCreatedSessionsRef.current.has(sessionId)) {
+      newlyCreatedSessionsRef.current.delete(sessionId)
+    }
+    
     // Lock controls for 1 second after backend response is ready
     setControlsLocked(true)
     if (controlsUnlockTimerRef.current !== null) {
@@ -405,6 +417,7 @@ function App() {
       // name after first message
       const newSessionName = files[0].name.slice(0, 20) + (files[0].name.length > 20 ? "..." : "")
       const newSession: Session = { id: sessionId, name: newSessionName }
+      newlyCreatedSessionsRef.current.add(sessionId) // Mark as newly created
       setCurrentSessionIndex(sessions.length)
       setSessions((prev) => [...prev, newSession])
     } else {
@@ -488,6 +501,7 @@ function App() {
       if (data.sessionId && currentSessionIndex === -1) {
         const newSessionName = url.slice(0, 20) + (url.length > 20 ? "..." : "")
         const newSession: Session = { id: data.sessionId, name: newSessionName }
+        newlyCreatedSessionsRef.current.add(data.sessionId) // Mark as newly created
         setCurrentSessionIndex(sessions.length)
         setSessions((prev) => [...prev, newSession])
         console.log("Created new session from URL:", data.sessionId, newSessionName)
