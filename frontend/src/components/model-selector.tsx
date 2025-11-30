@@ -118,6 +118,12 @@ export function ModelSelector({ onModelChange }: ModelSelectorProps) {
       return
     }
 
+    // Validate that model is in valid models list
+    if (!validModels.includes(newModelInput.trim())) {
+      setError(`"${newModelInput.trim()}" is not a valid Groq model. Please select from the suggestions or check the Groq documentation.`)
+      return
+    }
+
     setIsAddingModel(true)
     setError(null)
     try {
@@ -230,8 +236,9 @@ export function ModelSelector({ onModelChange }: ModelSelectorProps) {
                 
                 <button
                   onClick={handleAddModel}
-                  disabled={isAddingModel || !newModelInput.trim()}
+                  disabled={isAddingModel || !newModelInput.trim() || !validModels.includes(newModelInput.trim())}
                   className="w-full px-3 py-2 rounded text-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title={!validModels.includes(newModelInput.trim()) && newModelInput.trim() ? "Model is not in the valid Groq models list" : ""}
                 >
                   {isAddingModel ? "Adding..." : "Add Model"}
                 </button>
