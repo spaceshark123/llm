@@ -404,13 +404,24 @@ def history_endpoint():
 			if item['sources']:
 				updated_sources = []
 				for source in item['sources']:
-					if '.web' in source:
+					# Handle both string sources (legacy) and object sources with scores
+					if isinstance(source, dict):
+						source_name = source.get('name', '')
+					else:
+						source_name = source
+					
+					if '.web' in source_name:
 						# read first line of the file to get original URL
 						session_folder = os.path.join(DATA_PATH, session_id)
-						file_path = os.path.join(session_folder, source)
+						file_path = os.path.join(session_folder, source_name)
 						# add .md extension
 						file_path_md = file_path + '.md'
-						updated_sources.append(extract_url(file_path_md))
+						url = extract_url(file_path_md)
+						# Preserve score if it exists
+						if isinstance(source, dict) and 'score' in source:
+							updated_sources.append({'name': url, 'score': source['score']})
+						else:
+							updated_sources.append(url)
 					else:
 						updated_sources.append(source)
 				item['sources'] = updated_sources

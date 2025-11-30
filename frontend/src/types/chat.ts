@@ -2,7 +2,7 @@ export interface ChatMessage {
 	id: string
 	role: "user" | "assistant"
 	content: string
-	sources: string[]
+	sources: (string | { name: string; score: number })[]
 	timestamp: Date
 	isStreaming?: boolean
 	truncatedContent?: string
@@ -10,3 +10,4 @@ export interface ChatMessage {
 	originalInput?: string
 	urls?: string[]
 }
+

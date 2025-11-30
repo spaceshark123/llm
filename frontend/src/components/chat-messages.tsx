@@ -129,14 +129,25 @@ export function ChatMessages({ messages, onStreamingComplete, onStreamingStart }
               <div className="mt-3 pt-3 border-t border-border">
                 <p className="text-xs font-semibold text-muted-foreground mb-2">Sources:</p>
                 <div className="flex flex-wrap gap-2">
-                  {message.sources.map((source, idx) => (
-                    <span
-                      key={idx}
-                      className="inline-flex items-center gap-1 px-2 py-1 bg-muted rounded text-xs text-muted-foreground"
-                    >
-                      📎 {source}
-                    </span>
-                  ))}
+                  {message.sources.map((source, idx) => {
+                    // Handle both string sources and object sources with scores
+                    const sourceName = typeof source === 'string' ? source : (source as any).name
+                    const sourceScore = typeof source === 'object' ? (source as any).score : null
+                    
+                    return (
+                      <span
+                        key={idx}
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-muted rounded text-xs text-muted-foreground"
+                      >
+                        📎 {sourceName}
+                        {sourceScore !== null && typeof sourceScore === 'number' && (
+                          <span className="text-muted-foreground/70 ml-1">
+                            ({(sourceScore * 100).toFixed(0)}%)
+                          </span>
+                        )}
+                      </span>
+                    )
+                  })}
                 </div>
               </div>
             )}

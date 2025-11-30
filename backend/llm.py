@@ -84,7 +84,7 @@ def retrieve_context(db: Chroma, query: str, top_k: int = RAG_TOP_K, selected_so
         context_parts = []
         sources = []
         
-        for i, (doc, score) in enumerate(results, 1):
+        for i, (doc, distance) in enumerate(results, 1):
             # Extract source info
             source = doc.metadata.get('source', 'Unknown')
             source_original = source
@@ -93,10 +93,14 @@ def retrieve_context(db: Chroma, query: str, top_k: int = RAG_TOP_K, selected_so
             # Add document content
             context_parts.append(f"[Document {i} - {source}]\n{doc.page_content}\n")
             
+            # Convert L2 distance to similarity score (0-1 range)
+            # Formula: similarity = 1 / (1 + distance)
+            similarity_score = 1 / (1 + float(distance))
+            
             sources.append({
                 'name': os.path.basename(source_original),
                 'path': source_original,
-                'score': float(score)
+                'score': similarity_score
             })
         
         context_text = "\n".join(context_parts)
@@ -178,20 +182,20 @@ def chat(input_str: str, session_id: str = "default", db: Chroma = None, selecte
     ai_message_index = len(history.messages) - 1
     ai_metadata = {}
     
-    # Combine all sources
+    # Combine all sources with their scores
     all_sources = []
-    # if file_metadata:
-    #     all_sources.extend([f['name'] for f in file_metadata])
-    # if urls:
-    #     all_sources.extend(urls)
     if rag_sources:
-        all_sources.extend([s['name'].replace(".md", "") for s in rag_sources])
-        all_sources = list(set(all_sources))  # Remove duplicates
+        for source in rag_sources:
+            source_name = source['name'].replace(".md", "")
+            score = source.get('score', 0)
+            # Format as "source_name (score: 0.85)"
+            all_sources.append({
+                'name': source_name,
+                'score': score
+            })
         
     if all_sources:
         ai_metadata['sources'] = all_sources
-        # if rag_sources:
-        #     ai_metadata['ragSources'] = rag_sources
     
     if ai_metadata:
         history.add_message_metadata(ai_message_index, ai_metadata)
