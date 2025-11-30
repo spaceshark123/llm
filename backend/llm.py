@@ -29,6 +29,33 @@ SYSTEM_PROMPT = """You are a helpful and knowledgeable AI assistant. Respond in 
 When provided with context from documents, use that information to answer questions accurately.
 If the context doesn't contain relevant information, say so and answer based on your general knowledge."""
 
+current_llm = None
+available_models = ["llama-3.1-8b-instant", "llama-3.3-70b-versatile", "openai/gpt-oss-120b", "groq/compound"]
+
+def rebuild_chain():
+    """Rebuild the chain with the current LLM model."""
+    initialize_chain()
+
+def set_model(model_name: str):
+    """Switch the LLM model at runtime."""
+    global current_llm, MODEL_NAME
+    if model_name not in available_models:
+        raise ValueError(f"Model {model_name} is not available.")
+    MODEL_NAME = model_name
+    rebuild_chain()
+    return model_name
+
+def add_model(model_name: str):
+    """Add a new model to the available models list."""
+    global available_models
+    if not model_name or not isinstance(model_name, str):
+        raise ValueError("Model name must be a non-empty string.")
+    if model_name in available_models:
+        raise ValueError(f"Model {model_name} is already in the available models list.")
+    available_models.append(model_name)
+    print(f"Added model {model_name} to available models. Current list: {available_models}")
+    return model_name
+
 # Session store (for conversation histories)
 store = {}
 
@@ -174,31 +201,46 @@ def clear_session(session_id: str):
     """Clear the message history for a session."""
     if session_id in store:
         del store[session_id]
+
+# Global variables for LLM chain (will be initialized below)
+llm = None
+prompt = None
+chain = None
+chat_with_history = None
+
+def initialize_chain():
+    """Initialize the LLM chain. Called on startup and after model changes."""
+    global llm, prompt, chain, chat_with_history, MODEL_NAME
     
-# Initialize LLM
-llm = ChatGroq(
-    model_name=MODEL_NAME,
-    temperature=TEMPERATURE,
-    api_key=GROQ_API_KEY,
-)
+    # Initialize LLM
+    llm = ChatGroq(
+        model_name=MODEL_NAME,
+        temperature=TEMPERATURE,
+        api_key=GROQ_API_KEY,
+    )
 
-# Prompt with history placeholder
-prompt = ChatPromptTemplate.from_messages([
-    ("system", SYSTEM_PROMPT),
-    MessagesPlaceholder(variable_name="chat_history"),
-    ("human", "{input}")
-])
+    # Prompt with history placeholder
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", SYSTEM_PROMPT),
+        MessagesPlaceholder(variable_name="chat_history"),
+        ("human", "{input}")
+    ])
 
-# Create chain
-chain = prompt | llm | StrOutputParser()
+    # Create chain
+    chain = prompt | llm | StrOutputParser()
 
-# Wrap chain with message history
-chat_with_history = RunnableWithMessageHistory(
-    chain,
-    get_session_history=get_session_history,
-    input_messages_key="input",
-    history_messages_key="chat_history",
-)
+    # Wrap chain with message history
+    chat_with_history = RunnableWithMessageHistory(
+        chain,
+        get_session_history=get_session_history,
+        input_messages_key="input",
+        history_messages_key="chat_history",
+    )
+    
+    print(f"Chain initialized with model: {MODEL_NAME}")
+
+# Initialize chain on startup
+initialize_chain()
 
 # Example usage
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ import io
 import requests
 from urllib.parse import urlparse, quote
 import hashlib
+import llm as llm_module
 from llm import chat, get_session_history, clear_session
 from langchain_core.messages import HumanMessage, AIMessage
 from dotenv import load_dotenv
@@ -414,6 +415,36 @@ def history_endpoint():
 						updated_sources.append(source)
 				item['sources'] = updated_sources
 		return jsonify({'history': history_serialized}), 200
+
+@app.route('/api/models', methods=['GET'])
+def get_models():
+    """Get available models and current selection"""
+    return jsonify({
+        'available': llm_module.available_models,
+        'current': llm_module.MODEL_NAME
+    })
+
+@app.route('/api/models', methods=['POST'])
+def switch_model():
+    """Switch to a different model"""
+    data = request.json
+    model = data.get('model')
+    try:
+        llm_module.set_model(model)
+        return jsonify({'success': True, 'model': model})
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/api/models/add', methods=['POST'])
+def add_model():
+    """Add a new model to available models list"""
+    data = request.json
+    model = data.get('model')
+    try:
+        llm_module.add_model(model)
+        return jsonify({'success': True, 'model': model, 'available': llm_module.available_models})
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
 
 def extract_url(file_path: str) -> str:
 	"""

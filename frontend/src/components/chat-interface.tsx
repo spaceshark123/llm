@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { SquarePen, Menu, Upload, X } from "lucide-react"
 import type { Session } from "@/types/session"
 import { API_BASE_URL } from "@/constants"
+import { ModelSelector } from "./model-selector"
 
 interface ChatInterfaceProps {
   messages: ChatMessage[]
@@ -263,6 +264,13 @@ export function ChatInterface({
               <Menu className="h-5 w-5" />
             </Button>
             <h2 className="text-lg font-semibold text-foreground">Assistant{sessions[currentSessionIndex]?.name ? ": " + sessions[currentSessionIndex]?.name : ""}</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <ModelSelector onModelChange={() => {
+              // Optional: clear chat or show notification
+              console.log("Model changed")
+            }} />
+            {/* Other buttons */}
           </div>
         </div>
 
