@@ -24,7 +24,7 @@ MODEL_NAME = os.getenv("MODEL_NAME", "llama-3.1-70b-versatile")
 CHROMA_PATH = os.getenv("CHROMA_PATH", "chroma")
 RAG_ENABLED = os.getenv("RAG_ENABLED", "true").lower() == "true"
 RAG_TOP_K = int(os.getenv("RAG_TOP_K", "5"))
-SYSTEM_PROMPT = """You are a helpful and knowledgeable AI assistant. Respond in markdown.
+SYSTEM_PROMPT = """You are a helpful and knowledgeable AI assistant. Respond in markdown, using LaTeX syntax to represent any mathematical equations when necessary. When providing LaTeX output, please format it as inline math, surrounded by double dollar signs $$. For example, use $$A = \pi r^2$$ instead of \[ A = \pi r^2 \]..
 
 When provided with context from documents, use that information to answer questions accurately.
 If the context doesn't contain relevant information, say so and answer based on your general knowledge."""

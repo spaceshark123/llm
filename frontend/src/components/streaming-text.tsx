@@ -2,10 +2,15 @@ import { useState, useEffect, useRef, memo } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import rehypeHighlight from "rehype-highlight"
+import remarkMath from "remark-math"
+import rehypeKatex from "rehype-katex"
 
 // Memoized markdown renderer to avoid re-parsing during streaming
 const MarkdownDisplay = memo(({ content }: { content: string }) => (
-  <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+  <ReactMarkdown
+    remarkPlugins={[remarkGfm, [remarkMath, { singleDollarTextMath: false }]]}
+    rehypePlugins={[rehypeHighlight, rehypeKatex]}
+  >
     {content}
   </ReactMarkdown>
 ))
