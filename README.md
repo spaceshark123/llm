@@ -6,18 +6,19 @@ A full-stack Retrieval-Augmented Generation (RAG) chat application that enables 
 
 - **Interactive Chat**: Real-time conversation with AI assistant
 - **Multi-Format Support**: PDFs, DOCX, images (with OCR), and web URLs
-- **Vector Search**: Document chunking and retrieval using embeddings
-- **RAG Pipeline**: Intelligent context retrieval with overflow prevention
+- **Swappable LLM Models**: Easily swap LLM models for different use cases  
+- **Advanced Model Features**: Select models have built-in Web search, Reasoning, Code Execution, etc.
 - **Session Management**: Per-user isolated conversations and documents
 - **Markdown Support**: Rich chats with support for displaying bullet points, bold/italic text, code blocks, etc.
-- **Full Customization**: Easily swappable LLM and embedding models with Groq API and HuggingFace
+- **Vector Search**: Document chunking and retrieval using embeddings
+- **RAG Pipeline**: Intelligent context retrieval with overflow prevention
 
 ## Tech Stack
 
 ### Backend
 
 - **Framework**: Flask
-- **LLM**: Groq (llama-3.3-70b-versatile, llama-3.1-8b-instant, etc.)
+- **LLM**: GroqCloud API
 - **Embeddings**: HuggingFace (all-mpnet-base-v2, etc.)
 - **Vector Store**: Chroma with persistent storage
 - **Document Processing**: pypdf, python-docx, EasyOCR
@@ -52,6 +53,7 @@ llm/
 │   ├── src/
 │   │   ├── App.tsx        # Main application component
 │   │   ├── main.tsx       # Entry point
+|   |   ├── constants.tsx  # Frontend constants
 │   │   ├── components/
 │   │   │   ├── chat-interface.tsx    # Main chat UI
 │   │   │   ├── chat-input.tsx        # Message input & source selection
@@ -61,11 +63,12 @@ llm/
 │   │   ├── lib/
 │   │   │   └── utils.ts              # Utility functions
 │   │   └── types/
-│   │       └── chat.ts               # TypeScript types
+│   │       ├── chat.ts               # chat message typedef
+|   |       └── session.ts            # session typedef
 │   ├── package.json
 │   ├── vite.config.ts
 │   └── tsconfig.json
-│
+├── .env.sample            # sample environment file
 └── README.md              # This file
 ```
 
@@ -111,6 +114,7 @@ Visit `http://localhost:5173` in your browser.
 2. Type a question in the chat
 3. Select the sources you want to include
 4. Watch as the AI answers with context
+5. Try switching models for faster, more detailed, or more accurate responses
 
 ## API Examples
 
@@ -157,8 +161,8 @@ USER_AGENT="Mozilla/5.0"
 
 # LLM Settings
 TEMPERATURE=0.7
-# MAIN CHOICES: llama-3.3-70b-versatile or llama-3.1-8b-instant
-MODEL_NAME="llama-3.1-8b-instant" 
+# Initial default model (this doesn't matter as much, since the user can change it in the frontend)
+MODEL_NAME="llama-3.1-70b-versatile" 
 # Maximum prompt length in characters
 VITE_MAX_PROMPT_LENGTH=5000 
 
