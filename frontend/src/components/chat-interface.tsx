@@ -4,10 +4,19 @@ import { ChatInput } from "./chat-input"
 import { SourceManager } from "./source-manager"
 import type { ChatMessage } from "@/types/chat"
 import { Button } from "@/components/ui/button"
-import { SquarePen, Menu, Upload, X } from "lucide-react"
+import { SquarePen, Menu, Upload, X, Edit2 } from "lucide-react"
 import type { Session } from "@/types/session"
 import { API_BASE_URL } from "@/constants"
 import { ModelSelector } from "./model-selector"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 
 interface ChatInterfaceProps {
   messages: ChatMessage[]
@@ -72,6 +81,10 @@ export function ChatInterface({
   const [selectedUrls, setSelectedUrls] = useState<Set<number>>(
     new Set(Array.from({ length: uploadedUrls.length }, (_, i) => i))
   )
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false)
+  const [renameSessionId, setRenameSessionId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState("")
+  const [renameLoading, setRenameLoading] = useState(false)
 
   // When files are added externally, update selected state to include them
   useEffect(() => {
@@ -174,11 +187,10 @@ export function ChatInterface({
 
   const deleteSessionFolder = async (sessionId: string) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/history`, {
+      const response = await fetch(`${API_BASE_URL}/sessions/${sessionId}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
-          "Session-ID": sessionId,
         },
       })
       if (!response.ok) {
@@ -189,6 +201,52 @@ export function ChatInterface({
     } catch (error) {
       console.error("Error deleting session folder:", error)
     }
+  }
+
+  const handleRenameSession = async () => {
+    if (!renameSessionId || !renameValue.trim()) {
+      return
+    }
+
+    setRenameLoading(true)
+    try {
+      const response = await fetch(`${API_BASE_URL}/sessions/${renameSessionId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: renameValue.trim() }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        console.error("Failed to rename session:", error.error)
+        alert("Failed to rename session: " + error.error)
+      } else {
+        // Update the session name in the state
+        const updatedSessions = sessions.map((session) =>
+          session.id === renameSessionId
+            ? { ...session, name: renameValue.trim() }
+            : session
+        )
+        setSessions(updatedSessions)
+        setRenameDialogOpen(false)
+        setRenameValue("")
+        setRenameSessionId(null)
+        console.log("Session renamed successfully")
+      }
+    } catch (error) {
+      console.error("Error renaming session:", error)
+      alert("Error renaming session")
+    } finally {
+      setRenameLoading(false)
+    }
+  }
+
+  const openRenameDialog = (session: Session) => {
+    setRenameSessionId(session.id)
+    setRenameValue(session.name)
+    setRenameDialogOpen(true)
   }
 
   return (
@@ -228,10 +286,17 @@ export function ChatInterface({
                         }}
                         variant="outline"
                         size="sm"
-                        className="text-left w-[90%] max-w-[90%] overflow-x-clip justify-start bg-transparent! border-none! cursor-pointer inline"
+                        className="text-left w-[75%] max-w-[75%] overflow-x-clip justify-start bg-transparent! border-none! cursor-pointer inline"
                       >
                         {session.name}
                       </Button>
+                      <Edit2 
+                        className="rounded h-4 w-4 z-50 hover:text-blue-500 hover:cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openRenameDialog(session)
+                        }}
+                      />
                       <X className="rounded h-4 w-4 z-50 hover:text-red-500 hover:cursor-pointer" onClick={(e) => {
                             e.stopPropagation()
                             const newSessions = sessions.filter((_, i) => i !== index)
@@ -346,6 +411,45 @@ export function ChatInterface({
           />
         </div>
       </div>
+
+      {/* Rename Session Dialog */}
+      <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename Session</DialogTitle>
+            <DialogDescription>
+              Enter a new name for this session
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Input
+              placeholder="Session name"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  handleRenameSession()
+                }
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setRenameDialogOpen(false)}
+              disabled={renameLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleRenameSession}
+              disabled={renameLoading || !renameValue.trim()}
+            >
+              {renameLoading ? "Renaming..." : "Rename"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

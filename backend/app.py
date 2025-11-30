@@ -478,5 +478,53 @@ def extract_url(file_path: str) -> str:
 		print(f"Error extracting URL from {file_path}: {e}")
 	return ""
 
+# Session management endpoints
+@app.route('/api/sessions/<session_id>', methods=['PUT'])
+def rename_session(session_id):
+	"""Rename a session"""
+	data = request.json
+	new_name = data.get('name', '').strip()
+	
+	if not new_name:
+		return jsonify({'error': 'Session name cannot be empty'}), 400
+	
+	if not session_id or session_id.strip() == "":
+		return jsonify({'error': 'Session-ID is required'}), 400
+	
+	# Check if session folder exists
+	session_folder = os.path.join(DATA_PATH, session_id)
+	if not os.path.exists(session_folder):
+		return jsonify({'error': 'Session not found'}), 404
+	
+	# Return success with the new name
+	# Note: The actual session name is stored on the frontend, not in the backend
+	# The backend just validates that the session exists
+	print(f"Session {session_id} renamed to {new_name}")
+	return jsonify({'success': True, 'name': new_name, 'id': session_id}), 200
+
+@app.route('/api/sessions/<session_id>', methods=['DELETE'])
+def delete_session(session_id):
+	"""Delete a session and all its data"""
+	if not session_id or session_id.strip() == "":
+		return jsonify({'error': 'Session-ID is required'}), 400
+	
+	# Check if session folder exists
+	session_folder = os.path.join(DATA_PATH, session_id)
+	if not os.path.exists(session_folder):
+		return jsonify({'message': 'Session not found'}), 404
+	
+	# Clear session history and database
+	clear_session(session_id)
+	clear_session_db(session_id)
+	
+	# Delete session folder
+	try:
+		shutil.rmtree(session_folder)
+		print(f"Session {session_id} deleted completely")
+		return jsonify({'message': 'Session deleted successfully'}), 200
+	except Exception as e:
+		print(f"Error deleting session {session_id}: {e}")
+		return jsonify({'error': f'Failed to delete session: {str(e)}'}), 500
+
 if __name__ == '__main__':
 	app.run(port=PORT, debug=True)
