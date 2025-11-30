@@ -29,6 +29,7 @@ function App() {
   const [currentSessionIndex, setCurrentSessionIndex] = useState(-1)
   const [processingFiles, setProcessingFiles] = useState<Set<string>>(new Set())
   const [processingUrls, setProcessingUrls] = useState<Set<string>>(new Set())
+  const [isDarkMode, setIsDarkMode] = useState(true) // Default to dark mode
   const currentMessageIdRef = useRef<string | null>(null)
   const activeGenerationIdRef = useRef<number | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -100,6 +101,18 @@ function App() {
   useEffect(() => {
     fetchSessions()
   }, []) // fetch sessions on mount
+
+  // Update document theme when isDarkMode changes
+  useEffect(() => {
+    const root = document.documentElement
+    if (isDarkMode) {
+      root.classList.add('dark')
+      root.style.colorScheme = 'dark'
+    } else {
+      root.classList.remove('dark')
+      root.style.colorScheme = 'light'
+    }
+  }, [isDarkMode])
 
   useEffect(() => {
     if (isGenerating) return; // do not change messages while generating
@@ -680,6 +693,8 @@ function App() {
       currentSessionIndex={currentSessionIndex}
       setSessions={setSessions}
       setCurrentSessionIndex={setCurrentSessionIndex}
+      isDarkMode={isDarkMode}
+      setIsDarkMode={setIsDarkMode}
       onSelectedFilesChange={(selectedFiles) => {
         selectedFilesRef.current = selectedFiles
       }}

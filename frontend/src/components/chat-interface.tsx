@@ -4,7 +4,7 @@ import { ChatInput } from "./chat-input"
 import { SourceManager } from "./source-manager"
 import type { ChatMessage } from "@/types/chat"
 import { Button } from "@/components/ui/button"
-import { SquarePen, Menu, Upload, X, Edit2 } from "lucide-react"
+import { SquarePen, Menu, Upload, X, Edit2, Sun, Moon } from "lucide-react"
 import type { Session } from "@/types/session"
 import { API_BASE_URL } from "@/constants"
 import { ModelSelector } from "./model-selector"
@@ -44,6 +44,8 @@ interface ChatInterfaceProps {
   processingUrls?: Set<string>
   onSelectedFilesChange?: (selectedFiles: Set<number>) => void
   onSelectedUrlsChange?: (selectedUrls: Set<number>) => void
+  isDarkMode: boolean
+  setIsDarkMode: (isDark: boolean) => void
 }
 
 export function ChatInterface({
@@ -72,6 +74,8 @@ export function ChatInterface({
   processingUrls = new Set(),
   onSelectedFilesChange,
   onSelectedUrlsChange,
+  isDarkMode,
+  setIsDarkMode,
 }: ChatInterfaceProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [isDragOverChat, setIsDragOverChat] = useState(false)
@@ -255,8 +259,19 @@ export function ChatInterface({
         className={`${sidebarOpen ? "w-64" : "w-0"
           } transition-all duration-300 bg-card border-r border-border flex flex-col overflow-hidden`}
       >
-        <div className="p-4 border-b border-border">
+        <div className="p-4 border-b border-border flex items-center justify-between">
           <h1 className="text-xl font-bold text-foreground">LLM Chat</h1>
+          <button
+            onClick={() => setIsDarkMode(!isDarkMode)}
+            className="p-1.5 rounded hover:bg-muted transition-colors"
+            title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {isDarkMode ? (
+              <Moon className="h-5 w-5 text-purple-500" />
+            ) : (
+              <Sun className="h-5 w-5 text-orange-500" />
+            )}
+          </button>
         </div>
         <div className="flex-1 overflow-y-auto p-4">
           <div className="space-y-4">
