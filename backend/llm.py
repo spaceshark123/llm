@@ -20,7 +20,7 @@ if not GROQ_API_KEY:
     raise ValueError("GROQ_API_KEY is not set in environment variables.")
 
 TEMPERATURE = float(os.getenv("TEMPERATURE", "0.7"))
-MODEL_NAME = os.getenv("MODEL_NAME", "llama-3.1-8b-instant")
+MODEL_NAME = os.getenv("MODEL_NAME", "llama-3.1-70b-versatile")
 CHROMA_PATH = os.getenv("CHROMA_PATH", "chroma")
 RAG_ENABLED = os.getenv("RAG_ENABLED", "true").lower() == "true"
 RAG_TOP_K = int(os.getenv("RAG_TOP_K", "5"))
@@ -31,7 +31,24 @@ If the context doesn't contain relevant information, say so and answer based on 
 
 current_llm = None
 available_models = ["llama-3.1-8b-instant", "llama-3.3-70b-versatile", "openai/gpt-oss-120b", "groq/compound"]
-VALID_MODELS = ["allam-2-7b",  "groq/compound",  "groq/compound-mini",  "llama-3.1-8b-instant",  "llama-3.3-70b-versatile",  "meta-llama/llama-4-maverick-17b-128e-instruct",  "meta-llama/llama-4-scout-17b-16e-instruct",  "meta-llama/llama-guard-4-12b",  "meta-llama/llama-prompt-guard-2-22m",  "meta-llama/llama-prompt-guard-2-86m",  "moonshotai/kimi-k2-instruct",  "moonshotai/kimi-k2-instruct-0905",  "openai/gpt-oss-120b",  "openai/gpt-oss-20b",  "openai/gpt-oss-safeguard-20b",  "playai-tts",  "playai-tts-arabic",  "qwen/qwen3-32b",  "whisper-large-v3",  "whisper-large-v3-turbo"]
+VALID_MODELS = [
+    "allam-2-7b",  
+    "groq/compound",  
+    "groq/compound-mini",  
+    "llama-3.1-8b-instant",  
+    "llama-3.3-70b-versatile",  
+    "meta-llama/llama-4-maverick-17b-128e-instruct",  
+    "meta-llama/llama-4-scout-17b-16e-instruct",  
+    "meta-llama/llama-guard-4-12b",  
+    "meta-llama/llama-prompt-guard-2-22m",  
+    "meta-llama/llama-prompt-guard-2-86m",  
+    "moonshotai/kimi-k2-instruct",  
+    "moonshotai/kimi-k2-instruct-0905",  
+    "openai/gpt-oss-120b",  
+    "openai/gpt-oss-20b",  
+    "openai/gpt-oss-safeguard-20b", 
+    "qwen/qwen3-32b"
+]
 
 def rebuild_chain():
     """Rebuild the chain with the current LLM model."""

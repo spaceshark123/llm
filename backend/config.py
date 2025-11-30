@@ -24,7 +24,7 @@ class Config:
     if not GROQ_API_KEY:
         raise ValueError('GROQ_API_KEY environment variable is required')
     
-    MODEL_NAME: str = os.getenv('MODEL_NAME', 'llama-3.1-8b-instant')
+    MODEL_NAME: str = os.getenv('MODEL_NAME', 'llama-3.1-70b-versatile') # initial default model
     TEMPERATURE: float = float(os.getenv('TEMPERATURE', '0.7'))
     
     # Validate temperature range

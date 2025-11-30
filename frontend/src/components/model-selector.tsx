@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button"
 import { ChevronDown } from "lucide-react"
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5050/api"
+import { MODEL_CAPABILITIES as modelCapabilities } from "@/constants"
 
 interface ModelSelectorProps {
   onModelChange?: (model: string) => void
@@ -195,6 +196,12 @@ export function ModelSelector({ onModelChange }: ModelSelectorProps) {
                     }`}
                   >
                     {model}
+                    {/* List of model capabilities */}
+                    <ul className="text-xs text-muted-foreground mt-1 list-disc list-inside">
+                      {modelCapabilities[model]?.map((capability) => (
+                        <li key={capability}>{capability}</li>
+                      ))}
+                    </ul>
                   </button>
                 ))}
               </div>
@@ -208,12 +215,12 @@ export function ModelSelector({ onModelChange }: ModelSelectorProps) {
                   type="text"
                   value={newModelInput}
                   onChange={handleInputChange}
-                  onKeyPress={(e) => {
+                  onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       handleAddModel()
                     }
                   }}
-                  placeholder="e.g., mixtral-8x7b-32768"
+                  placeholder="e.g., qwen/qwen3-32b"
                   className="w-full px-3 py-2 rounded text-sm border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                   disabled={isAddingModel}
                   autoComplete="off"
