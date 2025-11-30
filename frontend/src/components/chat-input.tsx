@@ -19,6 +19,9 @@ interface ChatInputProps {
   isProcessingFiles?: boolean
 }
 
+// get from env or default to 5000
+const MAX_PROMPT_LENGTH = import.meta.env.VITE_MAX_PROMPT_LENGTH || 5000
+
 export function ChatInput({ onSendMessage, onFilesAdded, onUrlAdded, isGenerating = false, responseReady = false, onStopGeneration, onAnswerNow, streamingStarted = false, controlsLocked = false, isProcessingFiles = false }: ChatInputProps) {
   const [input, setInput] = useState("")
   const [urlInput, setUrlInput] = useState("")
@@ -197,9 +200,11 @@ export function ChatInput({ onSendMessage, onFilesAdded, onUrlAdded, isGeneratin
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               disabled={isGenerating || isProcessingFiles}
+              maxLength={MAX_PROMPT_LENGTH}
               className="flex-1 w-full px-3 py-2 rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none min-h-[40px] max-h-[120px] overflow-y-auto"
               rows={1}
             />
+            <p className={"text-xs text-muted-foreground text-right mt-1 relative"+(input.length >= MAX_PROMPT_LENGTH ? " text-red-500" : "")}>{input.length}/{MAX_PROMPT_LENGTH}</p>
           </div>
 
           {/* Send/Stop/Answer Now buttons */}
