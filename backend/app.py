@@ -446,6 +446,13 @@ def add_model():
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
 
+@app.route('/api/models/valid', methods=['GET'])
+def get_valid_models():
+    """Get list of valid Groq models from the whitelist"""
+    return jsonify({
+        'valid_models': llm_module.VALID_MODELS
+    })
+
 def extract_url(file_path: str) -> str:
 	"""
 	Extract URL from a .web.md file.

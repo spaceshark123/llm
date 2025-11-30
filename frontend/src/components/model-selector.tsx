@@ -16,10 +16,45 @@ export function ModelSelector({ onModelChange }: ModelSelectorProps) {
   const [error, setError] = useState<string | null>(null)
   const [newModelInput, setNewModelInput] = useState("")
   const [isAddingModel, setIsAddingModel] = useState(false)
+  const [validModels, setValidModels] = useState<string[]>([])
+  const [filteredSuggestions, setFilteredSuggestions] = useState<string[]>([])
 
   useEffect(() => {
     fetchModels()
+    fetchValidModels()
   }, [])
+
+  const fetchValidModels = async () => {
+    try {
+      const response = await fetch(`${API_URL}/models/valid`)
+      if (response.ok) {
+        const data = await response.json()
+        setValidModels(data.valid_models || [])
+      }
+    } catch (error) {
+      console.error("Failed to fetch valid models:", error)
+    }
+  }
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target.value
+    setNewModelInput(input)
+    
+    // Filter valid models based on input
+    if (input.trim()) {
+      const filtered = validModels.filter((model) =>
+        model.toLowerCase().includes(input.toLowerCase())
+      )
+      setFilteredSuggestions(filtered.slice(0, 5))
+    } else {
+      setFilteredSuggestions([])
+    }
+  }
+
+  const selectSuggestion = (suggestion: string) => {
+    setNewModelInput(suggestion)
+    setFilteredSuggestions([])
+  }
 
   const fetchModels = async () => {
     try {
@@ -162,11 +197,11 @@ export function ModelSelector({ onModelChange }: ModelSelectorProps) {
             {/* Add Model Section */}
             <div className="pt-2 border-t border-border space-y-2">
               <div className="text-xs font-semibold text-foreground">Add Custom Model:</div>
-              <div className="space-y-1">
+              <div className="space-y-1 relative">
                 <input
                   type="text"
                   value={newModelInput}
-                  onChange={(e) => setNewModelInput(e.target.value)}
+                  onChange={handleInputChange}
                   onKeyPress={(e) => {
                     if (e.key === "Enter") {
                       handleAddModel()
@@ -175,7 +210,24 @@ export function ModelSelector({ onModelChange }: ModelSelectorProps) {
                   placeholder="e.g., mixtral-8x7b-32768"
                   className="w-full px-3 py-2 rounded text-sm border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                   disabled={isAddingModel}
+                  autoComplete="off"
                 />
+                
+                {/* Suggestions dropdown */}
+                {filteredSuggestions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-background border border-border rounded shadow-lg z-50">
+                    {filteredSuggestions.map((suggestion) => (
+                      <button
+                        key={suggestion}
+                        onClick={() => selectSuggestion(suggestion)}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-accent text-foreground first:rounded-t last:rounded-b transition-colors"
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                
                 <button
                   onClick={handleAddModel}
                   disabled={isAddingModel || !newModelInput.trim()}
