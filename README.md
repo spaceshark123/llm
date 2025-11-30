@@ -2,38 +2,34 @@
 
 A full-stack Retrieval-Augmented Generation (RAG) chat application that enables users to interact with an AI assistant using their own documents and web sources as context.
 
-## Quick Links
-
-- **[Architecture Documentation](./ARCHITECTURE.md)** - System design, data flow, and technical details
-- **[API Documentation](./API_DOCS.md)** - Complete REST API reference with examples
-- **[Setup Guide](./SETUP.md)** - Installation and configuration instructions
-
 ## Features
 
-- 💬 **Interactive Chat**: Real-time conversation with AI assistant
-- 📄 **Multi-Format Support**: PDFs, DOCX, images (with OCR), and web URLs
-- 🔍 **Vector Search**: Semantic document retrieval using embeddings
-- 🚀 **RAG Pipeline**: Intelligent context retrieval with overflow prevention
-- 📊 **Session Management**: Per-user isolated conversations and documents
-- 🔐 **Type-Safe**: Full TypeScript frontend and Python type hints
-- ⚡ **Fast Inference**: Powered by Groq LLM API
+- **Interactive Chat**: Real-time conversation with AI assistant
+- **Multi-Format Support**: PDFs, DOCX, images (with OCR), and web URLs
+- **Vector Search**: Document chunking and retrieval using embeddings
+- **RAG Pipeline**: Intelligent context retrieval with overflow prevention
+- **Session Management**: Per-user isolated conversations and documents
+- **Markdown Support**: Rich chats with support for displaying bullet points, bold/italic text, code blocks, etc.
+- **Full Customization**: Easily swappable LLM and embedding models with Groq API and HuggingFace
 
 ## Tech Stack
 
 ### Backend
-- **Framework**: Flask with CORS support
-- **LLM**: Groq (llama-3.1-8b-instant)
-- **Embeddings**: HuggingFace (all-mpnet-base-v2)
+
+- **Framework**: Flask
+- **LLM**: Groq (llama-3.3-70b-versatile, llama-3.1-8b-instant, etc.)
+- **Embeddings**: HuggingFace (all-mpnet-base-v2, etc.)
 - **Vector Store**: Chroma with persistent storage
 - **Document Processing**: pypdf, python-docx, EasyOCR
-- **Web Scraping**: Selenium + BeautifulSoup
+- **Web Scraping**: Dynamic JS detection and website loading with Selenium + BeautifulSoup
 
 ### Frontend
-- **Framework**: React 19 with TypeScript
+
+- **Framework**: React + TypeScript
 - **Build Tool**: Vite
 - **Styling**: Tailwind CSS
-- **Components**: Radix UI
-- **Document Rendering**: pdf.js, Mammoth
+- **Components**: ShadCN UI
+- **Markdown Rendering**: React Markdown + Syntax Highlighting
 
 ## Project Structure
 
@@ -70,102 +66,8 @@ llm/
 │   ├── vite.config.ts
 │   └── tsconfig.json
 │
-├── ARCHITECTURE.md         # System architecture documentation
-├── API_DOCS.md            # REST API reference
-├── SETUP.md               # Installation and configuration guide
 └── README.md              # This file
 ```
-
-## Module Overview
-
-### Backend Modules
-
-#### `app.py` - Flask REST API
-Primary entry point serving all API endpoints:
-- `/api/chat` - Process messages with RAG context
-- `/api/sources` - Manage uploaded documents
-- `/api/urls` - Manage web sources
-- `/api/history` - Chat history retrieval and clearing
-- `/api/sessions` - Session management
-
-#### `llm.py` - LLM & Chat Logic
-Orchestrates LLM interactions and context retrieval:
-- `chat()` - Main chat function with session history
-- `retrieve_context()` - Vector store querying
-- `get_session_history()` - Session history management
-- Integration with Groq API
-
-#### `chroma.py` - Vector Database Management
-Handles document chunking and vector storage:
-- `RecursiveCharacterTextSplitter` - 300-token chunks with 100-token overlap
-- `add_single_document()` - Index new documents
-- `update_database()` - Process modified files
-- `rebuild_database()` - Full database rebuild
-- `remove_documents_by_source()` - Delete indexed content
-
-#### `extractors.py` - Document Text Extraction
-Modular document processing with graceful fallbacks:
-- `PDFExtractor` - Text + OCR for scanned pages
-- `DOCXExtractor` - Structured document parsing
-- `ImageExtractor` - EasyOCR-based image text extraction
-- `URLExtractor` - Selenium screenshots + HTML parsing
-- `DocumentExtractorFactory` - Unified extraction interface
-
-#### `db.py` - Session Database Caching
-Manages per-session vector databases:
-- `get_session_db()` - Get or create session database
-- `clear_session_db()` - Delete session data
-- In-memory caching to prevent reconnections
-
-#### `history.py` - Chat History with Metadata
-Conversation tracking with rich metadata:
-- `ChatMessageHistoryWithTimestamps` - Messages with timestamps
-- Per-message metadata storage (sources, files, URLs)
-- Session-scoped in-memory storage
-
-#### `config.py` - Configuration Management
-Centralized configuration from environment variables:
-- LLM settings (model, temperature)
-- RAG settings (enabled, top-k)
-- Chunking configuration
-- Path and resource limits
-- Error messages and feature flags
-
-#### `logger.py` - Structured Logging
-Application-wide logging configuration:
-- Console and file handlers
-- Rotating file logs
-- Multiple logger instances per module
-
-#### `app_types.py` - Type Definitions
-TypeScript-like type safety in Python:
-- `ChatMessage` - Message structure
-- `RetrievalResult` - Vector search results
-- `ExtractionResult` - Document processing results
-- Type aliases for clarity
-
-### Frontend Components
-
-#### `chat-interface.tsx`
-Main UI component displaying:
-- Chat message history
-- Message sender information
-- Source attribution
-- Loading states and errors
-
-#### `chat-input.tsx`
-User input handling:
-- Multiline text input
-- Source selection checkboxes
-- Send button with states
-- Keyboard shortcuts
-
-#### `source-manager.tsx`
-Document and URL management:
-- File upload with drag-and-drop
-- URL input form
-- Source listing
-- Delete functionality
 
 ## Getting Started
 
@@ -178,7 +80,7 @@ cd llm
 
 # Create .env file
 cp .env.sample .env
-# Edit .env and add GROQ_API_KEY
+# IMPORTANT: Edit .env and create/add GROQ_API_KEY from https://console.groq.com/keys
 
 # Backend setup
 cd backend
@@ -210,28 +112,6 @@ Visit `http://localhost:5173` in your browser.
 3. Select the sources you want to include
 4. Watch as the AI answers with context
 
-## Key Concepts
-
-### RAG (Retrieval-Augmented Generation)
-- Documents are split into 300-token chunks (100 overlap)
-- Chunks are embedded using all-mpnet-base-v2 (384-dim vectors)
-- User queries retrieve top-5 most relevant chunks
-- Context prepended to user message for LLM
-- References included in response
-
-### Context Overflow Prevention
-1. **Fixed retrieval depth**: Top-5 documents only
-2. **Chunk sizing**: 300 tokens prevents individual bloat
-3. **Source filtering**: Users select specific sources
-4. **Error handling**: 413 errors caught and reported
-5. **Token monitoring**: Oversized inputs return friendly error
-
-### Session Isolation
-- Each session has separate data directory: `data/{session_id}/`
-- Each session has separate Chroma database: `chroma/{session_id}/`
-- Clean separation prevents cross-session contamination
-- Cleanup on session deletion
-
 ## API Examples
 
 ### Chat with Context
@@ -261,90 +141,37 @@ curl -X GET http://localhost:5050/api/history \
   -H "Session-ID: my-session"
 ```
 
-See [API_DOCS.md](./API_DOCS.md) for complete reference.
-
 ## Configuration
 
-Create `.env` file with:
+Create `.env` file with same format as the provided [.env.sample](.env.sample) file. Make sure to set the `GROQ_API_KEY` value by creating an account/key at [GroqCloud](https://console.groq.com/keys):
 
 ```ini
-GROQ_API_KEY=your_key_here
-MODEL_NAME=llama-3.1-8b-instant
-TEMPERATURE=0.7
-RAG_ENABLED=true
-RAG_TOP_K=5
+# Overall Settings
+GROQ_API_KEY=your_api_key_here
+DATA_PATH="data"
+TEMP_PATH="temp"
+CHROMA_PATH="chroma"
 BACKEND_PORT=5050
 VITE_API_URL=http://localhost:5050/api
+USER_AGENT="Mozilla/5.0"
+
+# LLM Settings
+TEMPERATURE=0.7
+# MAIN CHOICES: llama-3.3-70b-versatile or llama-3.1-8b-instant
+MODEL_NAME="llama-3.1-8b-instant" 
+# Maximum prompt length in characters
+VITE_MAX_PROMPT_LENGTH=5000 
+
+# RAG Settings
+RAG_ENABLED=True
+RAG_TOP_K=5
+CHUNK_SIZE=300
+CHUNK_OVERLAP=100
+# MAIN CHOICES: all-mpnet-base-v2, sentence-transformers/all-MiniLM-L6-v2, etc.
+EMBEDDING_MODEL="all-mpnet-base-v2" 
 ```
 
-See [SETUP.md](./SETUP.md) for detailed configuration.
-
-## Documentation
-
-- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Deep dive into system design
-  - Component interactions
-  - Data flow examples
-  - Performance considerations
-  - Error handling strategies
-  
-- **[API_DOCS.md](./API_DOCS.md)** - Complete API reference
-  - All endpoints with examples
-  - Request/response formats
-  - Error codes and handling
-  - Code examples in multiple languages
-
-- **[SETUP.md](./SETUP.md)** - Installation guide
-  - Prerequisites and dependencies
-  - Step-by-step setup
-  - Troubleshooting
-  - Development workflow
-
-## Development
-
-### Code Quality
-
-- **Type Safety**: Python type hints, TypeScript frontend
-- **Logging**: Structured logging across all modules
-- **Error Handling**: Graceful degradation and user-friendly errors
-- **Documentation**: Comprehensive docstrings and API docs
-
-### Adding Features
-
-1. **New Document Format**: Add extractor to `extractors.py`
-2. **New LLM Model**: Update `config.py` and `llm.py`
-3. **New Endpoint**: Add route in `app.py`, document in `API_DOCS.md`
-4. **New UI Component**: Create in `frontend/src/components/`
-
-## Performance Notes
-
-- **Embedding Generation**: ~50-100 embeddings/second on CPU
-- **PDF OCR**: 1-2 minutes for 100 pages
-- **Chat Response**: 1-3 seconds typical
-- **Vector Search**: O(n) but optimized by Chroma
-- **Recommended Max Documents**: 100+ files per session
-
-## Security Considerations
-
-- Session IDs are client-managed (no auth)
-- File uploads validated before processing
-- URLs validated before fetching
-- No authentication layer (add for production)
-- Resource limits prevent abuse
-
-## Future Improvements
-
-- [ ] User authentication and authorization
-- [ ] Persistent session storage
-- [ ] Streaming responses
-- [ ] Advanced search (hybrid keyword + semantic)
-- [ ] Batch document processing
-- [ ] Analytics and usage tracking
-- [ ] Custom embedding models
-- [ ] Multi-turn RAG improvements
-
-## License
-
-MIT
+A full list of usable models for the `MODEL_NAME` field can be found [here](https://console.groq.com/docs/rate-limits), along with rate limits for each (RPM/RPD, TPM/TPD)
 
 ## Support
 
