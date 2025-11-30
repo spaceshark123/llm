@@ -34,8 +34,9 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 DATA_PATH: str = os.getenv("DATA_PATH", "data")
 CHROMA_BASE_PATH: str = os.getenv("CHROMA_PATH", "chroma")
-CHUNK_SIZE: int = 300
-CHUNK_OVERLAP: int = 100
+CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE", "300"))
+CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "100"))
+EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "all-mpnet-base-v2")
 
 def initialize_embeddings() -> HuggingFaceEmbeddings:
 	"""Initialize the HuggingFace embeddings model.
@@ -48,7 +49,7 @@ def initialize_embeddings() -> HuggingFaceEmbeddings:
 		First initialization downloads model (~500MB).
 	"""
 	embeddings = HuggingFaceEmbeddings(
-		model_name="all-mpnet-base-v2",
+		model_name=EMBEDDING_MODEL,
 		model_kwargs={'device': 'cpu'},
 		encode_kwargs={'normalize_embeddings': True}
 	)
