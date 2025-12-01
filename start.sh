@@ -87,6 +87,21 @@ else
   warn "backend/requirements.txt not found. Skipping pip install."
 fi
 
+# Check Node.js version for Vite compatibility
+if command -v node >/dev/null 2>&1; then
+  NODE_VERSION=$(node --version 2>/dev/null | sed 's/^v//')
+  NODE_MAJOR=$(echo "$NODE_VERSION" | cut -d. -f1)
+  info "Using Node.js $NODE_VERSION"
+  
+  if [ "$NODE_MAJOR" -lt 18 ]; then
+    err "Node.js 18+ required for Vite 7. Found v$NODE_VERSION. Please upgrade Node.js."
+  elif [ "$NODE_MAJOR" -eq 18 ] || [ "$NODE_MAJOR" -eq 20 ]; then
+    warn "Node.js v$NODE_VERSION detected. Vite 7 recommends Node.js 20+. Consider upgrading if you encounter issues."
+  fi
+else
+  warn "Node.js not found. Frontend will not start without Node.js."
+fi
+
 # Install frontend dependencies
 if command -v npm >/dev/null 2>&1 && [ -f "frontend/package.json" ]; then
   info "Installing frontend NPM packages..."
