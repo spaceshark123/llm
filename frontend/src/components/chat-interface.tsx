@@ -263,7 +263,7 @@ export function ChatInterface({
           <h1 className="text-xl font-bold text-foreground">LLM Chat</h1>
           <button
             onClick={() => setIsDarkMode(!isDarkMode)}
-            className="p-1.5 rounded hover:bg-muted transition-colors"
+            className="p-1.5 rounded hover:bg-muted cursor-pointer transition-colors"
             title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
           >
             {isDarkMode ? (
