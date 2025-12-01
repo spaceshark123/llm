@@ -53,6 +53,8 @@ try:
     SELENIUM_AVAILABLE = True
 except ImportError:
     SELENIUM_AVAILABLE = False
+    
+print("Selenium available:", SELENIUM_AVAILABLE)
 
 try:
     import fitz  # PyMuPDF
