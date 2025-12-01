@@ -41,7 +41,7 @@ if command -v python3 >/dev/null 2>&1; then
 elif command -v python >/dev/null 2>&1; then
   PYTHON=python
 else
-  err "Python is not installed. Please install Python 3.8+."
+  err "Python is not installed. Please install Python 3.11+."
 fi
 
 # Verify Python version
