@@ -19,7 +19,7 @@ export const MODEL_CAPABILITIES: Record<string, string[]> = {
 		"Reasoning"
 	],
 	"llama-3.1-8b-instant": [],
-	"llama-3.1-70b-instant": [],
+	"llama-3.3-70b-versatile": [],
 	"meta-llama/llama-4-maverick-17b-128e-instruct": [
 		"Vision"
 	],

@@ -69,16 +69,39 @@ llm/
 │   ├── vite.config.ts
 │   └── tsconfig.json
 ├── .env.sample            # sample environment file
+├── start.sh               # One-click script to setup and run entire project
+├── stop.sh                # One-click script to stop running the project
 └── README.md              # This file
 ```
 
 ## Getting Started
 
-### 1. Quick Setup
+### Easy Way
 
 ```bash
 # Clone repository
-git clone <repo>
+git clone https://github.com/spaceshark123/llm.git
+cd llm
+
+# Create .env file
+cp .env.sample .env
+# IMPORTANT: Edit .env and create/add GROQ_API_KEY from https://console.groq.com/keys
+
+./start.sh
+```
+
+There are two provided bash shell scripts for easy setup and reproduction on any system:
+
+- [start.sh](start.sh)
+- [stop.sh](stop.sh)
+
+### Hard Way
+
+#### 1. Quick Setup
+
+```bash
+# Clone repository
+git clone https://github.com/spaceshark123/llm.git
 cd llm
 
 # Create .env file
@@ -94,7 +117,7 @@ cd frontend
 npm install
 ```
 
-### 2. Run Application
+#### 2. Run Application
 
 ```bash
 # Terminal 1 - Backend
@@ -108,7 +131,7 @@ npm run dev
 
 Visit `http://localhost:5173` in your browser.
 
-### 3. Try It Out
+### Try It Out
 
 1. Upload a PDF or paste a URL
 2. Type a question in the chat
