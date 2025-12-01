@@ -9,7 +9,7 @@ A full-stack Retrieval-Augmented Generation (RAG) chat application that enables 
 - **Swappable LLM Models**: Easily swap LLM models for different use cases  
 - **Advanced Model Features**: Select models have built-in Web search, Reasoning, Code Execution, etc.
 - **Session Management**: Per-user isolated conversations and documents
-- **Markdown Support**: Rich chats with support for displaying bullet points, bold/italic text, code blocks, etc.
+- **Markdown and LaTeX Support**: Rich chats with support for bullet points, bold/italic text, code blocks, and complex math using LaTeX
 - **Vector Search**: Document chunking and retrieval using embeddings
 - **RAG Pipeline**: Intelligent context retrieval with overflow prevention
 
