@@ -20,7 +20,6 @@ if not GROQ_API_KEY:
     raise ValueError("GROQ_API_KEY is not set in environment variables.")
 
 TEMPERATURE = float(os.getenv("TEMPERATURE", "0.7"))
-MODEL_NAME = os.getenv("MODEL_NAME", "llama-3.1-70b-versatile")
 CHROMA_PATH = os.getenv("CHROMA_PATH", "chroma")
 RAG_ENABLED = os.getenv("RAG_ENABLED", "true").lower() == "true"
 RAG_TOP_K = int(os.getenv("RAG_TOP_K", "5"))
@@ -49,6 +48,20 @@ VALID_MODELS = [
     "openai/gpt-oss-safeguard-20b", 
     "qwen/qwen3-32b"
 ]
+
+# Resolve startup model safely: use env if valid, otherwise fall back
+def _resolve_startup_model() -> str:
+    env_model = os.getenv("MODEL_NAME", "").strip().strip('"')
+    # Prefer an intersection of available and valid
+    preferred = [m for m in available_models if m in VALID_MODELS]
+    default_model = preferred[0] if preferred else (available_models[0] if available_models else "")
+    if env_model and env_model in VALID_MODELS:
+        return env_model
+    if env_model and env_model not in VALID_MODELS:
+        print(f"Warning: MODEL_NAME '{env_model}' is not in valid model list. Falling back to '{default_model}'.")
+    return default_model
+
+MODEL_NAME = _resolve_startup_model()
 
 def rebuild_chain():
     """Rebuild the chain with the current LLM model."""
