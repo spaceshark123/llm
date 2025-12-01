@@ -46,7 +46,8 @@ export function SourceManager({
     [processingUrls]
   );
 
-  if (files.length === 0 && urls.length === 0 && processingUrls.size === 0) {
+  // Show bar if any real sources OR any in-flight processing (files or URLs)
+  if (files.length === 0 && urls.length === 0 && processingFiles.size === 0 && processingUrls.size === 0) {
     return null
   }
 
@@ -170,6 +171,21 @@ export function SourceManager({
                 </div>
               )
             })}
+            {/* Show spinners for any processing files that have not yet produced a file entry */}
+            {files.length === 0 && processingArray.length > 0 && processingArray.map((procId) => (
+              <div key={`pf-${procId}`} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm bg-primary/10 border border-primary/20">
+                <Spinner />
+                <FileText className="h-3.5 w-3.5 text-primary" />
+                <span className="text-foreground truncate max-w-[120px]">Uploading...</span>
+              </div>
+            ))}
+            {urls.length === 0 && processingUrlsArray.length > 0 && processingUrlsArray.map((procUrl) => (
+              <div key={`pu-${procUrl}`} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm bg-accent/10 border border-accent/20">
+                <Spinner />
+                <Globe className="h-3.5 w-3.5 text-accent-foreground" />
+                <span className="text-foreground truncate max-w-[120px]">Fetching...</span>
+              </div>
+            ))}
           </div>
         )}
       </div>

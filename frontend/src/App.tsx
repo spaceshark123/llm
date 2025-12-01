@@ -208,8 +208,9 @@ function App() {
               })
             }
             
-            setUploadedFiles(files)
-            setUploadedUrls(urls)
+            // Preserve existing local uploads if backend has not yet indexed them (avoid flicker/hide)
+            setUploadedFiles(prev => files.length > 0 ? files : prev)
+            setUploadedUrls(prev => urls.length > 0 ? urls : prev)
           } catch (error) {
             console.error("Error fetching sources:", error)
           }
